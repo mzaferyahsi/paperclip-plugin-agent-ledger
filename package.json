@@ -1,0 +1,23 @@
+{
+  "name": "paperclip-plugin-org-usage",
+  "version": "0.1.0",
+  "description": "Paperclip plugin: agent reporting hierarchy with configured and actual models, token usage and API-equivalent cost, as one table.",
+  "license": "MIT",
+  "private": false,
+  "type": "module",
+  "keywords": ["paperclip", "paperclip-plugin", "tokens", "usage", "cost"],
+  "paperclipPlugin": { "manifest": "./dist/manifest.js", "worker": "./dist/worker.js", "ui": "./dist/ui" },
+  "engines": { "node": ">=24.11.0" },
+  "files": ["manifest.json", "dist", "migrations", "README.md", "LICENSE", "CHANGELOG.md", "SECURITY.md", "PRIVACY.md", "THIRD_PARTY.md", "docs"],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && node scripts/build.mjs",
+    "pack:check": "node scripts/pack-check.mjs",
+    "validate:manifest": "node scripts/validate-manifest.mjs",
+    "update-snapshot": "node scripts/update-snapshot.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 tests/*.test.ts"
+  },
+  "dependencies": { "@paperclipai/plugin-sdk": "2026.1012.0", "react": "19.2.0" },
+  "devDependencies": { "@paperclipai/shared": "2026.1005.0", "@types/node": "24.10.0", "@types/react": "19.2.18", "esbuild": "0.25.11", "typescript": "5.9.3" }
+}

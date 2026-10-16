@@ -1,0 +1,54 @@
+{
+  "id": "mzaferyahsi.org-usage",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "minimumHostVersion": "2026.1012.0",
+  "displayName": "Org usage",
+  "description": "Reporting hierarchy, configured and actual models, token usage and API-equivalent cost per agent and per subtree. Prices refresh daily from public price lists; no agent is involved.",
+  "author": "mzaferyahsi",
+  "categories": ["ui", "automation"],
+  "capabilities": [
+    "database.namespace.read",
+    "database.namespace.write",
+    "database.namespace.migrate",
+    "jobs.schedule",
+    "http.outbound",
+    "instance.settings.register",
+    "ui.page.register",
+    "ui.sidebar.register"
+  ],
+  "entrypoints": { "worker": "./dist/worker.js", "ui": "./dist/ui" },
+  "database": {
+    "namespaceSlug": "org_usage",
+    "migrationsDir": "migrations",
+    "coreReadTables": ["agents", "cost_events", "heartbeat_runs"]
+  },
+  "jobs": [
+    {
+      "jobKey": "price-refresh",
+      "displayName": "Refresh model prices",
+      "description": "Daily HTTPS GET of public price lists (raw.githubusercontent.com, models.dev, platform.claude.com, developers.openai.com). Sends no installation or usage data.",
+      "schedule": "23 4 * * *"
+    }
+  ],
+  "instanceConfigSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "timezone": { "type": "string", "default": "Europe/Amsterdam", "description": "IANA time zone used for day boundaries (whole-hour offsets)." },
+      "inclusiveInputProviders": { "type": "array", "items": { "type": "string" }, "default": ["openai"], "description": "Providers whose input_tokens already include cached tokens." },
+      "heavyShareThreshold": { "type": "number", "default": 15, "minimum": 1, "maximum": 100, "description": "An agent using more than this percent of all tokens is flagged as a heavy spender." },
+      "lowDataRunThreshold": { "type": "integer", "default": 10, "minimum": 0, "description": "Agents with fewer runs than this in the range are flagged as low data." },
+      "priceChangeHoldPercent": { "type": "number", "default": 50, "minimum": 5, "maximum": 500, "description": "A fetched price change above this percentage is held until a board member accepts it." },
+      "priceStaleAfterDays": { "type": "integer", "default": 3, "minimum": 1, "description": "Prices are shown as stale when the last successful refresh is older than this." },
+      "priceSources": { "type": "array", "items": { "type": "string", "enum": ["anthropic-official", "openai-official", "litellm", "models-dev"] }, "default": ["anthropic-official", "openai-official", "litellm", "models-dev"], "description": "Enabled price sources in precedence order. Empty means bundled snapshot and overrides only, with no outbound requests." }
+    }
+  },
+  "ui": {
+    "slots": [
+      { "type": "sidebar", "id": "org-usage-sidebar", "displayName": "Org usage", "exportName": "OrgUsageSidebarItem" },
+      { "type": "page", "id": "org-usage-page", "displayName": "Org usage", "exportName": "OrgUsagePage", "routePath": "org-usage" },
+      { "type": "companySettingsPage", "id": "org-usage-settings", "displayName": "Org usage settings", "exportName": "OrgUsageSettingsPage", "routePath": "org-usage-settings" }
+    ]
+  }
+}
