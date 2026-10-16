@@ -159,7 +159,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const delta = data?.priorTotals && data.priorTotals.tokens > 0 ? ((data.totals.tokens - data.priorTotals.tokens) / data.priorTotals.tokens) * 100 : null;
 
   return <div className="ou"><style>{css}</style>
-    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent ledger</h1>{data && <PriceBadge data={data} />}</div>
+    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent Ledger</h1>{data && <PriceBadge data={data} />}</div>
     {narrow ? <MobileControls range={range} setRange={setRange} custom={custom} setCustom={setCustom} mode={mode} setMode={setMode} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort}
       adapters={adapters} models={models} tiers={tiers} onExpandAll={() => data && setExpanded(new Set(Object.values(data.nodes).filter((n) => n.children.length).map((n) => n.agentId)))} onCollapse={() => data && setExpanded(expandedToLevel(data, 1))} onCsv={exportCsv} /> : <>
     <div className="bar">
@@ -184,7 +184,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
     </div></>}
     {result.loading && !data && <p role="status">Loading agent ledger…</p>}
-    {result.error && <div role="alert">Agent ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
+    {result.error && <div role="alert">Agent Ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
     {data && st && <>
       {Object.keys(data.errors).length > 0 && <div role="alert" className="badge warn">Some data could not be read: {Object.entries(data.errors).map(([k, v]) => `${k} (${v})`).join('; ')}</div>}
       {narrow ? <MobileSummary data={data} delta={delta} /> : <div className="sum">
@@ -231,9 +231,9 @@ const isFilteringNow = (f: Filters) => !!(f.adapter || f.model || f.tier || f.fl
 export function AgentLedgerSidebarItem(_props: PluginSidebarProps) {
   const navigation = useHostNavigation();
   const [hover, setHover] = useState(false);
-  return <a {...navigation.linkProps('/agent-ledger')} aria-label="Agent ledger" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+  return <a {...navigation.linkProps('/agent-ledger')} aria-label="Agent Ledger" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
     style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 8px', padding: '6px 8px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none',
       color: 'color-mix(in srgb, var(--foreground) 80%, transparent)', background: hover ? 'var(--accent)' : 'transparent', transition: 'background-color .15s' }}>
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <rect x="3" y="3" width="18" height="5" rx="1" /><rect x="7" y="10" width="14" height="5" rx="1" /><rect x="11" y="17" width="10" height="4" rx="1" /></svg>Agent ledger</a>;
+      <rect x="3" y="3" width="18" height="5" rx="1" /><rect x="7" y="10" width="14" height="5" rx="1" /><rect x="11" y="17" width="10" height="4" rx="1" /></svg>Agent Ledger</a>;
 }

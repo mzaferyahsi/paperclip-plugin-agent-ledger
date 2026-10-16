@@ -5,7 +5,7 @@ for (const scheme of ['light', 'dark']) {
   await p.goto('http://127.0.0.1:3101/QAT/dashboard'); await p.waitForTimeout(3500);
   const info = await p.evaluate(() => {
     const out = {};
-    for (const label of ['Routines', 'Artifacts', 'Agent ledger']) {
+    for (const label of ['Routines', 'Artifacts', 'Agent Ledger']) {
       const a = [...document.querySelectorAll('a')].find((x) => x.textContent.trim() === label);
       if (!a) { out[label] = null; continue; }
       const svg = a.querySelector('svg'); const cs = getComputedStyle(a); const sc = svg && getComputedStyle(svg);

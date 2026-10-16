@@ -61,7 +61,7 @@ export function AgentLedgerSettingsPage({ context }: PluginCompanySettingsPagePr
     <table style={{ borderCollapse: 'collapse', width: '100%' }}><tbody>{rules(kind).map((r) => <tr key={r.key}><td style={td}>{show(r)}</td><td style={{ ...td, textAlign: 'right' }}>{isBoard && <button style={btn} disabled={busy} onClick={() => del(r)}>Remove</button>}</td></tr>)}</tbody></table>;
 
   return <div style={{ display: 'grid', gap: 14, fontSize: 13 }}>
-    <h1 style={{ fontSize: 20, margin: 0 }}>Agent ledger settings</h1>
+    <h1 style={{ fontSize: 20, margin: 0 }}>Agent Ledger Settings</h1>
     {msg && <div role="status">{msg}</div>}
     {result.loading && !d && <p role="status">Loading…</p>}
     {result.error && <div role="alert">Could not load settings. <button style={btn} onClick={result.refresh}>Retry</button></div>}

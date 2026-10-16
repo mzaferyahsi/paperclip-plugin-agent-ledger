@@ -1,4 +1,4 @@
-# Agent ledger
+# Agent Ledger
 
 A Paperclip plugin that shows every agent in a table, in reporting order, with its configured and actual model, token usage and an API-equivalent cost estimate. Totals roll up the hierarchy, so you can see what a whole branch of the organisation uses.
 
@@ -25,7 +25,7 @@ npm run build
 paperclipai plugin install --local /path/to/paperclip-plugin-agent-ledger
 ```
 
-The page appears in the sidebar as "Agent ledger" and at `/<company prefix>/agent-ledger`. Settings are under Company settings, "Agent ledger settings".
+The page appears in the sidebar as "Agent Ledger" and at `/<company prefix>/agent-ledger`. Settings are under Company settings, "Agent Ledger Settings".
 
 Uninstall with `paperclipai plugin uninstall mzaferyahsi.agent-ledger` (add `--force` to also delete the plugin's tables).
 

@@ -15,7 +15,7 @@ import { addSums, zeroSums, type ActualModel, type OrgNode, type AgentLedgerData
 export class BadRequest extends Error {}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function requireCompany(companyId: unknown): string {
-  if (typeof companyId !== 'string' || !UUID.test(companyId)) throw new BadRequest('Agent ledger needs a company context');
+  if (typeof companyId !== 'string' || !UUID.test(companyId)) throw new BadRequest('Agent Ledger needs a company context');
   return companyId;
 }
 export function parseRange(raw: unknown): RangeInput {

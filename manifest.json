@@ -1,9 +1,9 @@
 {
   "id": "mzaferyahsi.agent-ledger",
   "apiVersion": 1,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "minimumHostVersion": "2026.1012.0",
-  "displayName": "Agent ledger",
+  "displayName": "Agent Ledger",
   "description": "Reporting hierarchy, configured and actual models, token usage and API-equivalent cost per agent and per subtree. Prices refresh daily from public price lists; no agent is involved.",
   "author": "mzaferyahsi",
   "categories": ["ui", "automation"],
@@ -46,9 +46,9 @@
   },
   "ui": {
     "slots": [
-      { "type": "sidebar", "id": "agent-ledger-sidebar", "displayName": "Agent ledger", "exportName": "AgentLedgerSidebarItem" },
-      { "type": "page", "id": "agent-ledger-page", "displayName": "Agent ledger", "exportName": "AgentLedgerPage", "routePath": "agent-ledger" },
-      { "type": "companySettingsPage", "id": "agent-ledger-settings", "displayName": "Agent ledger settings", "exportName": "AgentLedgerSettingsPage", "routePath": "agent-ledger-settings" }
+      { "type": "sidebar", "id": "agent-ledger-sidebar", "displayName": "Agent Ledger", "exportName": "AgentLedgerSidebarItem" },
+      { "type": "page", "id": "agent-ledger-page", "displayName": "Agent Ledger", "exportName": "AgentLedgerPage", "routePath": "agent-ledger" },
+      { "type": "companySettingsPage", "id": "agent-ledger-settings", "displayName": "Agent Ledger Settings", "exportName": "AgentLedgerSettingsPage", "routePath": "agent-ledger-settings" }
     ]
   }
 }

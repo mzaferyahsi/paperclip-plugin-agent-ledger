@@ -5,7 +5,7 @@ import { parseModelsDev } from './parse-models-dev.ts';
 import { parseAnthropicOfficial, parseOpenAiOfficial } from './parse-official.ts';
 import type { ParseOutcome } from './candidate.ts';
 
-export const USER_AGENT = 'paperclip-plugin-agent-ledger/0.2.1';
+export const USER_AGENT = 'paperclip-plugin-agent-ledger/0.2.2';
 export interface Source { key: SourceKey; label: string; url: string; accept: string | null; parse: (body: string) => ParseOutcome }
 
 export const SOURCES: readonly Source[] = [
