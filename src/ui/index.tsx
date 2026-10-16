@@ -20,6 +20,8 @@ const css = `
 .ou *{box-sizing:border-box}
 .ou button,.ou select,.ou input{font:inherit}
 .ou .bar{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center}
+.ou .grp{display:inline-flex;align-items:center;gap:8px}
+.ou .gl{color:var(--muted-foreground);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
 .ou .seg{display:inline-flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
 .ou .seg button{padding:5px 10px;border:0;border-right:1px solid var(--border);background:transparent;color:var(--muted-foreground);cursor:pointer}
 .ou .seg button:last-child{border-right:0}
@@ -153,11 +155,11 @@ export function OrgUsagePage({ context }: PluginPageProps) {
   return <div className="ou"><style>{css}</style>
     <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Org usage</h1>{data && <PriceBadge data={data} />}</div>
     <div className="bar">
-      <div className="seg" role="group" aria-label="Time range">{PRESETS.map((p) => <button key={p} type="button" title={RANGE_TIP[p]} aria-pressed={range === p} onClick={() => setRange(p)}>{LABEL[p]}</button>)}
-        <button type="button" title="Use the From and To dates. Pick both dates first." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div>
+      <div className="grp"><span className="gl" id="ou-range-label">Time range</span><div className="seg" role="group" aria-labelledby="ou-range-label">{PRESETS.map((p) => <button key={p} type="button" title={RANGE_TIP[p]} aria-pressed={range === p} onClick={() => setRange(p)}>{LABEL[p]}</button>)}
+        <button type="button" title="Use the From and To dates. Pick both dates first." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div></div>
       <label className="f" title="First day of a custom range">From <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
       <label className="f" title="Last day of a custom range">To <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
-      <div className="seg" role="group" aria-label="Totals shown">{(['own', 'sub', 'both'] as const).map((m) => <button key={m} type="button" title={MODE_TIP[m]} aria-pressed={mode === m} onClick={() => setMode(m)}>{m === 'own' ? 'Own' : m === 'sub' ? 'Subtree' : 'Both'}</button>)}</div>
+      <div className="grp"><span className="gl" id="ou-mode-label">Totals</span><div className="seg" role="group" aria-labelledby="ou-mode-label">{(['own', 'sub', 'both'] as const).map((m) => <button key={m} type="button" title={MODE_TIP[m]} aria-pressed={mode === m} onClick={() => setMode(m)}>{m === 'own' ? 'Own' : m === 'sub' ? 'Subtree' : 'Both'}</button>)}</div></div>
       <button type="button" className="btn" title="Open every manager to show all agents" onClick={() => data && setExpanded(new Set(Object.values(data.nodes).filter((n) => n.children.length).map((n) => n.agentId)))}>Expand all</button>
       <button type="button" className="btn" title="Show the top two levels of the organisation only" onClick={() => data && setExpanded(expandedToLevel(data, 1))}>Collapse to level 2</button>
       <button type="button" className="btn" title="Go back to the organisation tree after sorting by a column" disabled={!sort} onClick={() => setSort(null)}>Hierarchy order</button>

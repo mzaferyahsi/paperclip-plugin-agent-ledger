@@ -1,7 +1,7 @@
 {
   "id": "mzaferyahsi.org-usage",
   "apiVersion": 1,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "minimumHostVersion": "2026.1012.0",
   "displayName": "Org usage",
   "description": "Reporting hierarchy, configured and actual models, token usage and API-equivalent cost per agent and per subtree. Prices refresh daily from public price lists; no agent is involved.",
