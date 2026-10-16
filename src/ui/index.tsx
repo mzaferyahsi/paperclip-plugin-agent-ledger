@@ -50,6 +50,7 @@ const css = `
 .ou .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--muted-foreground)}
 .ou .dot.running{background:#16a34a}.ou .dot.paused{background:#d97706}.ou .dot.error{background:var(--destructive)}
 .ou .mo{font-family:${mono};font-size:12px}
+.ou .rc{display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
 .ou .mc{display:inline-block;max-width:330px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .ou .flag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;margin-right:4px;border:1px solid var(--border)}
 .ou .flag.crit{color:var(--destructive);border-color:var(--destructive)}.ou .flag.warn{color:#b45309;border-color:#b45309}
@@ -78,7 +79,7 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
     case 'name': return <span style={{ paddingLeft: flat ? 0 : depth * 18 }}>
       {!flat && mgr ? <button type="button" className="chev" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${n.name}`} onClick={toggle}>{open ? '▼' : '▶'}</button> : <span className="chev e">▶</span>}
       <strong>{n.name}</strong></span>;
-    case 'role': return <span className="dim">{n.title ?? n.role}</span>;
+    case 'role': return <span className="dim rc" title={n.title ?? n.role}>{n.title ?? n.role}</span>;
     case 'status': return <><span className={`dot ${n.status}`} />{n.status}</>;
     case 'parent': return n.reportsTo ? <>{data.nodes[n.reportsTo]?.name ?? <span className="dim">terminated</span>}</> : <span className="dim">—</span>;
     case 'depth': return <span className="mo">{n.depth}</span>;

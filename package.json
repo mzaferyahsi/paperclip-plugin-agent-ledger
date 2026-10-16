@@ -1,6 +1,6 @@
 {
   "name": "paperclip-plugin-org-usage",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Paperclip plugin: agent reporting hierarchy with configured and actual models, token usage and API-equivalent cost, as one table.",
   "license": "MIT",
   "private": false,

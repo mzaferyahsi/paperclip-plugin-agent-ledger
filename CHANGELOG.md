@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.1.2
+
+- Long role titles are shortened so the token and cost columns stay in view.
+
 ## 0.1.1
 
 - Simpler model column: the current model, with every model used shown on hover.
