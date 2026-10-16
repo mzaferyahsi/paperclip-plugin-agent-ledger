@@ -2,7 +2,7 @@
 
 ```
 UI (React, host-provided)               Worker (Paperclip plugin host)
-  OrgUsagePage  ── usePluginData ──▶   data 'org-usage'  → assemble.getOrgUsage
+  AgentLedgerPage  ── usePluginData ──▶   data 'agent-ledger'  → assemble.getOrgUsage
   Settings page ── usePluginAction ─▶   actions (board only), data 'settings'
                                          job 'price-refresh' → prices/refresh
 ```
@@ -14,6 +14,6 @@ UI (React, host-provided)               Worker (Paperclip plugin host)
 - `src/rules.ts`: append-only rules (overrides, aliases, free providers, tiers); current state is the newest row per key.
 - `src/ui/model.ts`: React-free table logic (visible rows, filters, sort, CSV) with unit tests.
 
-Storage (`migrations/001_init.sql`, schema `plugin_org_usage_<hash>`): `price_versions`, `price_collections`, `collection_lock`, `rules`, `company_seen`.
+Storage (`migrations/001_init.sql`, schema `plugin_agent_ledger_<hash>`): `price_versions`, `price_collections`, `collection_lock`, `rules`, `company_seen`.
 
 Payload contract: `src/types.ts`.

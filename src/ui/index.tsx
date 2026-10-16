@@ -1,11 +1,11 @@
 import { useHostNavigation, usePluginData } from '@paperclipai/plugin-sdk/ui';
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
 import { useMemo, useState } from 'react';
-import type { OrgNode, OrgUsageData } from '../types.ts';
+import type { OrgNode, AgentLedgerData } from '../types.ts';
 import { COLUMNS, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
-import { OrgUsageSettingsPage } from './settings.tsx';
+import { AgentLedgerSettingsPage } from './settings.tsx';
 
-export { OrgUsageSettingsPage };
+export { AgentLedgerSettingsPage };
 const PRESETS = ['today', 'yesterday', '7d', '14d', '30d'] as const;
 const LABEL: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', '7d': '7 days', '14d': '14 days', '30d': '30 days' };
 const RANGE_TIP: Record<string, string> = { today: 'Usage since midnight today', yesterday: 'Usage during yesterday only', '7d': 'The last 7 days, including today', '14d': 'The last 14 days, including today', '30d': 'The last 30 days, including today' };
@@ -54,7 +54,7 @@ const css = `
 .ou .mo{font-family:${mono};font-size:12px}
 .ou .rc{display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
 .ou .mc{display:inline-block;max-width:330px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
-.ou .flag{display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;margin-right:4px;border:1px solid var(--border)}
+.ou .flag{cursor:help;display:inline-block;font-size:10.5px;font-weight:600;padding:1px 6px;border-radius:4px;margin-right:4px;border:1px solid var(--border)}
 .ou .flag.crit{color:var(--destructive);border-color:var(--destructive)}.ou .flag.warn{color:#b45309;border-color:#b45309}
 .ou .tb{height:3px;background:var(--muted-foreground);opacity:.5;border-radius:2px;margin:3px 0 0 auto}
 .ou .note{color:var(--muted-foreground);font-size:11.5px;display:flex;flex-wrap:wrap;gap:4px 18px}
@@ -66,12 +66,12 @@ const css = `
 const initialFilters: Filters = { adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
 
 function loadCols(): Set<ColumnKey> {
-  try { const raw = localStorage.getItem('org-usage.columns.v2'); if (raw) return new Set(JSON.parse(raw) as ColumnKey[]); } catch { /* storage unavailable */ }
+  try { const raw = localStorage.getItem('agent-ledger.columns.v2'); if (raw) return new Set(JSON.parse(raw) as ColumnKey[]); } catch { /* storage unavailable */ }
   return new Set(COLUMNS.filter((c) => c.defaultOn).map((c) => c.key));
 }
-function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('org-usage.columns.v2', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
+function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v2', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
-function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n: OrgNode; col: ColumnKey; data: OrgUsageData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void }) {
+function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void }) {
   const mgr = n.children.length > 0;
   const num = (get: (s: typeof n.own) => number, fmt: (v: number) => string) => {
     const main = fmt(get(sumsFor(n, mode)));
@@ -103,7 +103,7 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
       return <span className="n" title={title}>{c.text}{mode === 'both' && mgr && <span className="own">own {fmtCost(n.own).text}</span>}</span>;
     }
     case 'runs': return <span className="n">{num((s) => s.runs, (v) => Math.round(v).toLocaleString('en-US'))}</span>;
-    case 'flags': return <>{n.flags.map((f) => <span key={f.code} className={`flag ${f.severity}`} tabIndex={0} title={`${FLAG_HELP[f.code]?.meaning ?? f.code}\n\nThis agent: ${f.detail}`}>{FLAG_HELP[f.code]?.label ?? f.code}</span>)}</>;
+    case 'flags': return <>{n.flags.map((f) => <FlagChip key={f.code} code={f.code} severity={f.severity} detail={f.detail} />)}</>;
   }
 }
 
@@ -118,16 +118,29 @@ const FLAG_HELP: Record<string, { label: string; meaning: string }> = {
   tier: { label: 'TIER', meaning: 'Tier mismatch: the tier of the agent\'s model differs from the tier you set for its role.' },
 };
 
-function PriceBadge({ data }: { data: OrgUsageData }) {
+// Instant tooltip for a flag (native title text is slow to appear and easy to miss).
+function FlagChip({ code, severity, detail }: { code: string; severity: string; detail: string }) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const help = FLAG_HELP[code];
+  const show = (el: HTMLElement) => { const r = el.getBoundingClientRect(); setPos({ x: Math.max(8, Math.min(r.left, window.innerWidth - 340)), y: r.bottom + 6 }); };
+  return <span className={`flag ${severity}`} tabIndex={0} role="note" aria-label={`${help?.label ?? code}: ${help?.meaning ?? ''} This agent: ${detail}`}
+    onMouseEnter={(e) => show(e.currentTarget)} onMouseLeave={() => setPos(null)} onFocus={(e) => show(e.currentTarget)} onBlur={() => setPos(null)}>
+    {help?.label ?? code}
+    {pos && <span role="tooltip" style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 100, width: 320, padding: '8px 10px', borderRadius: 6, background: 'var(--popover, var(--background))', color: 'var(--popover-foreground, var(--foreground))', border: '1px solid var(--border)', boxShadow: '0 4px 14px rgba(0,0,0,.25)', fontSize: 12, fontWeight: 400, lineHeight: 1.4, whiteSpace: 'normal', textTransform: 'none', letterSpacing: 0, pointerEvents: 'none', textAlign: 'left' }}>
+      {help?.meaning}<span style={{ display: 'block', marginTop: 6, color: 'var(--muted-foreground)' }}>This agent: {detail}</span></span>}
+  </span>;
+}
+
+function PriceBadge({ data }: { data: AgentLedgerData }) {
   const p = data.pricing;
   if (p.snapshotOnly) return <span className="badge warn" title="No successful refresh yet">Prices: bundled snapshot of {p.snapshotDate}</span>;
   return <span className={`badge${p.stale ? ' warn' : ''}`} title={p.sources.map((s) => `${s.label}: ${s.status}`).join('\n')}>Prices as of {new Date(p.asOf!).toLocaleString()}{p.stale ? ' (stale)' : ''}</span>;
 }
 
-export function OrgUsagePage({ context }: PluginPageProps) {
+export function AgentLedgerPage({ context }: PluginPageProps) {
   const [range, setRange] = useState<string | { from: string; to: string }>('7d');
   const [custom, setCustom] = useState({ from: '', to: '' });
-  const result = usePluginData<OrgUsageData>('org-usage', { companyId: context.companyId, range });
+  const result = usePluginData<AgentLedgerData>('agent-ledger', { companyId: context.companyId, range });
   const [mode, setMode] = useState<Mode>('both');
   const [filters, setFilters] = useState<Filters>(initialFilters);
   const [sort, setSort] = useState<TableState['sort']>(null);
@@ -153,7 +166,7 @@ export function OrgUsagePage({ context }: PluginPageProps) {
   const delta = data?.priorTotals && data.priorTotals.tokens > 0 ? ((data.totals.tokens - data.priorTotals.tokens) / data.priorTotals.tokens) * 100 : null;
 
   return <div className="ou"><style>{css}</style>
-    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Org usage</h1>{data && <PriceBadge data={data} />}</div>
+    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent ledger</h1>{data && <PriceBadge data={data} />}</div>
     <div className="bar">
       <div className="grp"><span className="gl" id="ou-range-label">Time range</span><div className="seg" role="group" aria-labelledby="ou-range-label">{PRESETS.map((p) => <button key={p} type="button" title={RANGE_TIP[p]} aria-pressed={range === p} onClick={() => setRange(p)}>{LABEL[p]}</button>)}
         <button type="button" title="Use the From and To dates. Pick both dates first." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div></div>
@@ -175,8 +188,8 @@ export function OrgUsagePage({ context }: PluginPageProps) {
       <label className="f" title="Only agents that have at least one flag"><input type="checkbox" checked={filters.flagsOnly} onChange={(e) => setFilters({ ...filters, flagsOnly: e.target.checked })} />Anomalies only</label>
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
     </div>
-    {result.loading && !data && <p role="status">Loading org usage…</p>}
-    {result.error && <div role="alert">Org usage could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
+    {result.loading && !data && <p role="status">Loading agent ledger…</p>}
+    {result.error && <div role="alert">Agent ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
     {data && st && <>
       {Object.keys(data.errors).length > 0 && <div role="alert" className="badge warn">Some data could not be read: {Object.entries(data.errors).map(([k, v]) => `${k} (${v})`).join('; ')}</div>}
       <div className="sum">
@@ -219,8 +232,13 @@ export function OrgUsagePage({ context }: PluginPageProps) {
 }
 const isFilteringNow = (f: Filters) => !!(f.adapter || f.model || f.tier || f.flagsOnly || f.q);
 
-export function OrgUsageSidebarItem(_props: PluginSidebarProps) {
+// Matches the host's own sidebar items: 80% foreground, 6px 8px padding, 10px gap, rounded, accent background on hover.
+export function AgentLedgerSidebarItem(_props: PluginSidebarProps) {
   const navigation = useHostNavigation();
-  return <a {...navigation.linkProps('/org-usage')} aria-label="Org usage" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', fontSize: 13, fontWeight: 500, color: 'inherit', textDecoration: 'none' }}>
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><rect x="2" y="2" width="12" height="3" rx="1" /><rect x="5" y="7" width="9" height="3" rx="1" /><rect x="8" y="12" width="6" height="2" rx="1" /></svg>Org usage</a>;
+  const [hover, setHover] = useState(false);
+  return <a {...navigation.linkProps('/agent-ledger')} aria-label="Agent ledger" onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+    style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '0 8px', padding: '6px 8px', borderRadius: 8, fontSize: 13, fontWeight: 500, textDecoration: 'none',
+      color: 'color-mix(in srgb, var(--foreground) 80%, transparent)', background: hover ? 'var(--accent)' : 'transparent', transition: 'background-color .15s' }}>
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <rect x="3" y="3" width="18" height="5" rx="1" /><rect x="7" y="10" width="14" height="5" rx="1" /><rect x="11" y="17" width="10" height="4" rx="1" /></svg>Agent ledger</a>;
 }

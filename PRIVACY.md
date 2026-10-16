@@ -9,7 +9,7 @@ Once a day (and when a board member presses "Refresh now") the worker makes plai
 - `raw.githubusercontent.com` (LiteLLM price list)
 - `models.dev` (models.dev price list)
 
-Each request carries the URL, a fixed `User-Agent` of `paperclip-plugin-org-usage/<version>` and an `Accept` header. No cookies, no credentials, no query string, no body. Nothing about your installation, companies, agents, issues or usage is sent. The remote servers see your host's IP address and that this plugin is installed.
+Each request carries the URL, a fixed `User-Agent` of `paperclip-plugin-agent-ledger/<version>` and an `Accept` header. No cookies, no credentials, no query string, no body. Nothing about your installation, companies, agents, issues or usage is sent. The remote servers see your host's IP address and that this plugin is installed.
 
 The allowlist is enforced in code (`src/prices/fetch.ts`, `src/prices/sources.ts`): a request to any other host, over plain HTTP, with credentials, a port or a query string is refused, redirects off the allowlist are refused, and bodies over 12 MB are refused. A build test fails if any other file makes or names an outbound request. Paperclip itself does not sandbox outbound domains, so this is a control inside the plugin, and approving the `http.outbound` capability approves requests to these four hosts.
 

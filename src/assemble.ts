@@ -10,12 +10,12 @@ import { foldRules, loadRuleRows, type Rules } from './rules.ts';
 import { agentsQuery, historyStartQuery, runsQuery, usageQuery } from './sql.ts';
 import { resolveRange, type RangeInput, type ResolvedRange } from './time.ts';
 import { buildTree, sumRoots } from './tree.ts';
-import { addSums, zeroSums, type ActualModel, type OrgNode, type OrgUsageData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
+import { addSums, zeroSums, type ActualModel, type OrgNode, type AgentLedgerData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
 
 export class BadRequest extends Error {}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function requireCompany(companyId: unknown): string {
-  if (typeof companyId !== 'string' || !UUID.test(companyId)) throw new BadRequest('Org usage needs a company context');
+  if (typeof companyId !== 'string' || !UUID.test(companyId)) throw new BadRequest('Agent ledger needs a company context');
   return companyId;
 }
 export function parseRange(raw: unknown): RangeInput {
@@ -85,7 +85,7 @@ export interface BuildInput {
   agents: AgentRow[]; usage: UsageRow[]; priorUsage: UsageRow[]; runs: RunRow[]; book: PriceBook; rules: Rules; config: Config;
   range: ResolvedRange; firstEpoch: number | null;
 }
-export type BuildOutput = Omit<OrgUsageData, 'pricing' | 'generatedAt' | 'pluginVersion' | 'errors'> & { unmatched: Array<{ provider: string; model: string; tokens: number }> };
+export type BuildOutput = Omit<AgentLedgerData, 'pricing' | 'generatedAt' | 'pluginVersion' | 'errors'> & { unmatched: Array<{ provider: string; model: string; tokens: number }> };
 
 const iso = (ms: number) => new Date(ms).toISOString();
 export function rangeMeta(r: ResolvedRange): RangeMeta {
@@ -179,7 +179,7 @@ export async function getPricingStatus(db: Db, config: Config, nowMs: number, un
   };
 }
 
-export async function getOrgUsage(env: Env, companyIdRaw: unknown, rangeRaw: unknown): Promise<OrgUsageData> {
+export async function getAgentLedger(env: Env, companyIdRaw: unknown, rangeRaw: unknown): Promise<AgentLedgerData> {
   const companyId = requireCompany(companyIdRaw);
   const input = parseRange(rangeRaw);
   let range: ResolvedRange;

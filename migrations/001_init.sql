@@ -1,6 +1,6 @@
 -- Instance-scoped list prices (a list price is not company data) and company-scoped rules.
 -- Fully qualified names only. The host forbids triggers and functions; rules is append-only by convention.
-CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.price_versions (
+CREATE TABLE IF NOT EXISTS plugin_agent_ledger_d6bdbef9cb.price_versions (
   id uuid PRIMARY KEY,
   provider_key text NOT NULL,
   model_key text NOT NULL,
@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.price_versions (
   change_pct numeric(12,3),
   UNIQUE (provider_key, model_key, effective_from)
 );
-CREATE INDEX IF NOT EXISTS price_versions_lookup ON plugin_org_usage_15e77c4184.price_versions (model_key, provider_key, status, effective_from);
+CREATE INDEX IF NOT EXISTS price_versions_lookup ON plugin_agent_ledger_d6bdbef9cb.price_versions (model_key, provider_key, status, effective_from);
 
-CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.price_collections (
+CREATE TABLE IF NOT EXISTS plugin_agent_ledger_d6bdbef9cb.price_collections (
   id uuid PRIMARY KEY,
   source text NOT NULL,
   started_at timestamptz NOT NULL,
@@ -32,15 +32,15 @@ CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.price_collections (
   invalid integer NOT NULL DEFAULT 0,
   finding text
 );
-CREATE INDEX IF NOT EXISTS price_collections_recent ON plugin_org_usage_15e77c4184.price_collections (finished_at);
+CREATE INDEX IF NOT EXISTS price_collections_recent ON plugin_agent_ledger_d6bdbef9cb.price_collections (finished_at);
 
-CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.collection_lock (
+CREATE TABLE IF NOT EXISTS plugin_agent_ledger_d6bdbef9cb.collection_lock (
   singleton boolean PRIMARY KEY DEFAULT true,
   lease_until timestamptz NOT NULL
 );
 
 -- Current state of a rule = newest row per (company_id, kind, key); active = false deletes it.
-CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.rules (
+CREATE TABLE IF NOT EXISTS plugin_agent_ledger_d6bdbef9cb.rules (
   id bigserial PRIMARY KEY,
   company_id uuid NOT NULL,
   kind text NOT NULL CHECK (kind IN ('price_override', 'model_alias', 'provider_alias', 'provider_free', 'tier_model', 'tier_role')),
@@ -50,11 +50,11 @@ CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.rules (
   actor_user_id text NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS rules_lookup ON plugin_org_usage_15e77c4184.rules (company_id, kind, key, id);
+CREATE INDEX IF NOT EXISTS rules_lookup ON plugin_agent_ledger_d6bdbef9cb.rules (company_id, kind, key, id);
 
 -- Scheduled jobs run without a company, but plugin configuration is per company. The job reads the configuration
 -- of the company that most recently opened the page.
-CREATE TABLE IF NOT EXISTS plugin_org_usage_15e77c4184.company_seen (
+CREATE TABLE IF NOT EXISTS plugin_agent_ledger_d6bdbef9cb.company_seen (
   company_id uuid PRIMARY KEY,
   seen_at timestamptz NOT NULL
 );

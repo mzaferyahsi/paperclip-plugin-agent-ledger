@@ -1,9 +1,9 @@
 {
-  "id": "mzaferyahsi.org-usage",
+  "id": "mzaferyahsi.agent-ledger",
   "apiVersion": 1,
-  "version": "0.1.3",
+  "version": "0.2.0",
   "minimumHostVersion": "2026.1012.0",
-  "displayName": "Org usage",
+  "displayName": "Agent ledger",
   "description": "Reporting hierarchy, configured and actual models, token usage and API-equivalent cost per agent and per subtree. Prices refresh daily from public price lists; no agent is involved.",
   "author": "mzaferyahsi",
   "categories": ["ui", "automation"],
@@ -19,7 +19,7 @@
   ],
   "entrypoints": { "worker": "./dist/worker.js", "ui": "./dist/ui" },
   "database": {
-    "namespaceSlug": "org_usage",
+    "namespaceSlug": "agent_ledger",
     "migrationsDir": "migrations",
     "coreReadTables": ["agents", "cost_events", "heartbeat_runs"]
   },
@@ -46,9 +46,9 @@
   },
   "ui": {
     "slots": [
-      { "type": "sidebar", "id": "org-usage-sidebar", "displayName": "Org usage", "exportName": "OrgUsageSidebarItem" },
-      { "type": "page", "id": "org-usage-page", "displayName": "Org usage", "exportName": "OrgUsagePage", "routePath": "org-usage" },
-      { "type": "companySettingsPage", "id": "org-usage-settings", "displayName": "Org usage settings", "exportName": "OrgUsageSettingsPage", "routePath": "org-usage-settings" }
+      { "type": "sidebar", "id": "agent-ledger-sidebar", "displayName": "Agent ledger", "exportName": "AgentLedgerSidebarItem" },
+      { "type": "page", "id": "agent-ledger-page", "displayName": "Agent ledger", "exportName": "AgentLedgerPage", "routePath": "agent-ledger" },
+      { "type": "companySettingsPage", "id": "agent-ledger-settings", "displayName": "Agent ledger settings", "exportName": "AgentLedgerSettingsPage", "routePath": "agent-ledger-settings" }
     ]
   }
 }

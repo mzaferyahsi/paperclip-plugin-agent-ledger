@@ -1,5 +1,5 @@
 // Table logic with no React, so it is unit-tested directly.
-import type { OrgNode, OrgUsageData, Sums } from '../types.ts';
+import type { OrgNode, AgentLedgerData, Sums } from '../types.ts';
 
 export type Mode = 'own' | 'sub' | 'both';
 export type ColumnKey = 'name' | 'role' | 'status' | 'parent' | 'depth' | 'adapter' | 'model' | 'tier' | 'input' | 'cached' | 'output' | 'tokens' | 'cost' | 'runs' | 'flags';
@@ -23,7 +23,7 @@ export const COLUMNS: Array<{ key: ColumnKey; label: string; numeric: boolean; d
 
 export const sumsFor = (n: OrgNode, mode: Mode): Sums => (mode === 'own' || n.children.length === 0 ? n.own : n.subtree);
 
-export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: OrgUsageData): number | string {
+export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLedgerData): number | string {
   const s = sumsFor(n, mode);
   switch (key) {
     case 'name': return n.name.toLowerCase();
@@ -50,7 +50,7 @@ export function matches(n: OrgNode, f: Filters): boolean {
 }
 export const isFiltering = (f: Filters) => !!(f.adapter || f.model || f.tier || f.flagsOnly || f.q);
 
-export function visibleRows(data: OrgUsageData, st: TableState): Row[] {
+export function visibleRows(data: AgentLedgerData, st: TableState): Row[] {
   const rows: Row[] = [];
   const all = Object.values(data.nodes);
   const filtering = isFiltering(st.filters);
@@ -80,7 +80,7 @@ export function visibleRows(data: OrgUsageData, st: TableState): Row[] {
   return rows;
 }
 
-export function expandedToLevel(data: OrgUsageData, levels: number): Set<string> {
+export function expandedToLevel(data: AgentLedgerData, levels: number): Set<string> {
   return new Set(Object.values(data.nodes).filter((n) => n.depth < levels && n.children.length).map((n) => n.agentId));
 }
 
@@ -106,7 +106,7 @@ export function fmtCost(s: Sums): { text: string; partial: boolean; none: boolea
   return { text: (s.unpricedTokens > 0 ? '≥ ' : '') + fmtUsd(s.costMicro), partial: s.unpricedTokens > 0, none: false };
 }
 
-export function toCsv(data: OrgUsageData, rows: Row[], mode: Mode): string {
+export function toCsv(data: AgentLedgerData, rows: Row[], mode: Mode): string {
   const q = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const head = ['name', 'role', 'status', 'reports_to', 'depth', 'adapter', 'configured_model', 'actual_models', 'input', 'cached', 'output', 'total', 'cost_usd_est', 'runs', 'flags'];
   const lines = [`# range ${data.range.fromDate}..${data.range.toDate} ${data.range.timezone}; cost is an API-equivalent estimate in USD; totals shown: ${mode}`, head.join(',')];

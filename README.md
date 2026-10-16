@@ -1,4 +1,4 @@
-# Org usage
+# Agent ledger
 
 A Paperclip plugin that shows every agent in a table, in reporting order, with its configured and actual model, token usage and an API-equivalent cost estimate. Totals roll up the hierarchy, so you can see what a whole branch of the organisation uses.
 
@@ -22,12 +22,12 @@ Requires Paperclip 2026.1012.0 or newer and Node 24.
 ```sh
 npm install
 npm run build
-paperclipai plugin install --local /path/to/paperclip-plugin-org-usage
+paperclipai plugin install --local /path/to/paperclip-plugin-agent-ledger
 ```
 
-The page appears in the sidebar as "Org usage" and at `/<company prefix>/org-usage`. Settings are under Company settings, "Org usage settings".
+The page appears in the sidebar as "Agent ledger" and at `/<company prefix>/agent-ledger`. Settings are under Company settings, "Agent ledger settings".
 
-Uninstall with `paperclipai plugin uninstall mzaferyahsi.org-usage` (add `--force` to also delete the plugin's tables).
+Uninstall with `paperclipai plugin uninstall mzaferyahsi.agent-ledger` (add `--force` to also delete the plugin's tables).
 
 ## Capabilities and why
 

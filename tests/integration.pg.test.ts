@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { startPg, type TestPg } from './pg-helper.ts';
 import { NS } from '../src/namespace.ts';
 import { Cache } from '../src/cache.ts';
-import { DEFAULT_CONFIG, getOrgUsage } from '../src/assemble.ts';
+import { DEFAULT_CONFIG, getAgentLedger } from '../src/assemble.ts';
 import { refreshPrices } from '../src/prices/refresh.ts';
 import { ensureSnapshot, loadVersions, HELD_SQL, DECIDE_HELD_SQL } from '../src/prices/store.ts';
 import { INSERT_RULE_SQL } from '../src/rules.ts';
@@ -50,7 +50,7 @@ const env = () => ({ db: pg!, config: DEFAULT_CONFIG, now: () => NOW, cache: new
 
 test('org tree sums, normalisation, bigint and pricing reconcile', { skip: process.env.SKIP_PG === '1' }, async (t) => {
   if (!pg) return t.skip('embedded postgres not available');
-  const d = await getOrgUsage(env(), C, { from: '2026-10-14', to: '2026-10-16' });
+  const d = await getAgentLedger(env(), C, { from: '2026-10-14', to: '2026-10-16' });
   assert.deepEqual(d.errors, {});
   assert.deepEqual(d.roots, [id(1)]);
   const leaf = d.nodes[id(3)]!, mid = d.nodes[id(2)]!, root = d.nodes[id(1)]!;
@@ -73,7 +73,7 @@ test('org tree sums, normalisation, bigint and pricing reconcile', { skip: proce
 
 test('company scoping: another company sees nothing', async (t) => {
   if (!pg) return t.skip('no pg');
-  const d = await getOrgUsage(env(), '22222222-2222-2222-2222-222222222222', '7d');
+  const d = await getAgentLedger(env(), '22222222-2222-2222-2222-222222222222', '7d');
   assert.equal(Object.keys(d.nodes).length, 0);
   assert.equal(d.totals.tokens, 0);
 });
@@ -82,7 +82,7 @@ test('rules: override prices win, free providers show no cost, aliases map names
   if (!pg) return t.skip('no pg');
   await pg.execute(INSERT_RULE_SQL, [C, 'price_override', 'openai/gpt-6-luna', JSON.stringify({ input: 1, output: 1, cachedInput: 1 }), true, 'u1']);
   await pg.execute(INSERT_RULE_SQL, [C, 'provider_free', 'anthropic', '{}', true, 'u1']);
-  const d = await getOrgUsage(env(), C, { from: '2026-10-14', to: '2026-10-16' });
+  const d = await getAgentLedger(env(), C, { from: '2026-10-14', to: '2026-10-16' });
   const leaf = d.nodes[id(3)]!;
   assert.equal(leaf.own.costMicro, leaf.own.tokens, '$1 per MTok on every token = tokens micro-USD');
   assert.equal(d.nodes[id(2)]!.own.freeTokens, d.nodes[id(2)]!.own.tokens);

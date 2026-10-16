@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.2.0
+
+- Renamed from "Org usage" to "Agent ledger" (plugin id `mzaferyahsi.agent-ledger`, package `paperclip-plugin-agent-ledger`, page route `agent-ledger`). Installs of the old name must be uninstalled first.
+- Sidebar link matches the host items (colour, spacing, hover). Visible headings on the time range and totals groups. Instant flag tooltips.
+
+## 0.1.4
+
+- Sidebar link now matches the host's own items (colour, spacing, hover).
+- Flags show an instant tooltip with their meaning on hover or keyboard focus, and use the help cursor.
+
 ## 0.1.3
 
 - Visible headings "Time range" and "Totals" on the two button groups.

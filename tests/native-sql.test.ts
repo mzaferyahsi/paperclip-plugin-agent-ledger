@@ -29,7 +29,7 @@ const writes: Array<[string, string]> = [
 test('namespace literal matches the host derivation', () => {
   assert.equal(NS, guard?.derivePluginDatabaseNamespace(manifest.id, manifest.database.namespaceSlug) ?? NS);
   assert.match(readFileSync(new URL('../migrations/001_init.sql', import.meta.url), 'utf8'), new RegExp(NS));
-  assert.equal(readFileSync(new URL('../migrations/001_init.sql', import.meta.url), 'utf8').match(/plugin_org_usage_[0-9a-f]+/g)!.every((x) => x === NS), true);
+  assert.equal(readFileSync(new URL('../migrations/001_init.sql', import.meta.url), 'utf8').match(/plugin_agent_ledger_[0-9a-f]+/g)!.every((x) => x === NS), true);
 });
 for (const [name, q] of reads) test(`read ${name} passes the host guard`, { skip: !guard }, () => guard.validatePluginRuntimeQuery(q, NS, CORE));
 for (const [name, q] of writes) test(`write ${name} passes the host guard`, { skip: !guard }, () => guard.validatePluginRuntimeExecute(q, NS));

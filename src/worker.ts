@@ -1,5 +1,5 @@
 import { definePlugin, runWorker, type PluginContext } from '@paperclipai/plugin-sdk';
-import { BadRequest, getOrgUsage, readConfig, requireCompany, type Config, type Env } from './assemble.ts';
+import { BadRequest, getAgentLedger, readConfig, requireCompany, type Config, type Env } from './assemble.ts';
 import { Cache } from './cache.ts';
 import { validateTimezone } from './time.ts';
 import { schemaProbeQueries } from './sql.ts';
@@ -15,7 +15,7 @@ interface Actor { type?: string; userId?: string | null; companyId?: string | nu
 export const isBoard = (a: Actor | null | undefined): a is Actor & { userId: string } => !!a && a.type === 'user' && typeof a.userId === 'string' && a.userId.length > 0;
 class Forbidden extends Error {}
 function requireBoard(a: Actor | null | undefined): string {
-  if (!isBoard(a)) throw new Forbidden('Only board members can change org usage settings');
+  if (!isBoard(a)) throw new Forbidden('Only board members can change agent ledger settings');
   return a.userId;
 }
 
@@ -24,7 +24,7 @@ const plugin = definePlugin({
     const cache = new Cache();
     for (const p of schemaProbeQueries()) {
       ctx.db.query(p.sql, p.params).catch((e: unknown) =>
-        ctx.logger.error('This Paperclip version is not supported by org-usage: a host table changed shape', { error: String(e) }));
+        ctx.logger.error('This Paperclip version is not supported by agent-ledger: a host table changed shape', { error: String(e) }));
     }
     if (ctx.db.namespace !== NS) ctx.logger.error('plugin schema differs from the derived namespace; SQL will fail', { host: ctx.db.namespace, derived: NS });
     // Seed the bundled price snapshot so history is priced before the first refresh.
@@ -40,10 +40,10 @@ const plugin = definePlugin({
     const env = async (p: Record<string, unknown>): Promise<Env> =>
       ({ db: ctx.db, config: await config(p.companyId), now: () => Date.now(), cache, pluginVersion: manifest.version });
 
-    ctx.data.register('org-usage', async (p) => {
+    ctx.data.register('agent-ledger', async (p) => {
       const companyId = requireCompany(p.companyId);
       ctx.db.execute(SEEN_UPSERT_SQL, [companyId]).catch(() => {});
-      return getOrgUsage(await env(p), companyId, p.range);
+      return getAgentLedger(await env(p), companyId, p.range);
     });
 
     ctx.data.register('settings', async (p) => {
@@ -51,7 +51,7 @@ const plugin = definePlugin({
       const cfg = await config(companyId);
       const rules = await loadRuleRows(ctx.db, companyId);
       const held = await ctx.db.query(HELD_SQL);
-      const usage = await getOrgUsage(await env({ companyId }), companyId, '30d');
+      const usage = await getAgentLedger(await env({ companyId }), companyId, '30d');
       return { rules, held, pricing: usage.pricing, config: cfg, folded: foldRules(rules) };
     });
 

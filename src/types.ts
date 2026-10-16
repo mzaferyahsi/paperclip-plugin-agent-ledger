@@ -28,7 +28,7 @@ export interface PricingStatus {
 export interface RangeMeta {
   kind: string; fromDate: string; toDate: string; fromUtc: string; toUtc: string; days: number; timezone: string; clamped: boolean; priorFromUtc: string; priorToUtc: string;
 }
-export interface OrgUsageData {
+export interface AgentLedgerData {
   generatedAt: string; pluginVersion: string; range: RangeMeta;
   roots: string[]; nodes: Record<string, OrgNode>; unattached: string[];
   terminated: { count: number; withUsage: number; own: Sums; prior: Sums | null; agents: Array<{ agentId: string; name: string; tokens: number; runs: number; costMicro: number }> };

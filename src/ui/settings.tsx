@@ -39,7 +39,7 @@ function UnpricedRow({ m, canEdit, busy, onPrice, onFree }: { m: { provider: str
       <button style={btn} disabled={busy} onClick={onFree}>{m.provider} is free</button></span>}</td></tr>;
 }
 
-export function OrgUsageSettingsPage({ context }: PluginCompanySettingsPageProps) {
+export function AgentLedgerSettingsPage({ context }: PluginCompanySettingsPageProps) {
   const result = usePluginData<SettingsData>('settings', { companyId: context.companyId });
   const put = usePluginAction('rules.put');
   const decide = usePluginAction('prices.decide');
@@ -61,7 +61,7 @@ export function OrgUsageSettingsPage({ context }: PluginCompanySettingsPageProps
     <table style={{ borderCollapse: 'collapse', width: '100%' }}><tbody>{rules(kind).map((r) => <tr key={r.key}><td style={td}>{show(r)}</td><td style={{ ...td, textAlign: 'right' }}>{isBoard && <button style={btn} disabled={busy} onClick={() => del(r)}>Remove</button>}</td></tr>)}</tbody></table>;
 
   return <div style={{ display: 'grid', gap: 14, fontSize: 13 }}>
-    <h1 style={{ fontSize: 20, margin: 0 }}>Org usage settings</h1>
+    <h1 style={{ fontSize: 20, margin: 0 }}>Agent ledger settings</h1>
     {msg && <div role="status">{msg}</div>}
     {result.loading && !d && <p role="status">Loading…</p>}
     {result.error && <div role="alert">Could not load settings. <button style={btn} onClick={result.refresh}>Retry</button></div>}

@@ -7,7 +7,7 @@ const errors = [];
 for (const [name, vp, scheme] of [['desktop-light', { width: 1500, height: 900 }, 'light'], ['desktop-dark', { width: 1500, height: 900 }, 'dark'], ['phone', { width: 390, height: 844 }, 'light']]) {
   const page = await browser.newPage({ viewport: vp, colorScheme: scheme });
   page.on('pageerror', (e) => errors.push(`${name}: ${e}`)); page.on('console', (m) => { if (m.type() === 'error') errors.push(`${name}: ${m.text()}`); });
-  await page.goto(`${base}/org-usage`); await page.waitForSelector('.ou table', { timeout: 20000 }).catch(() => {});
+  await page.goto(`${base}/agent-ledger`); await page.waitForSelector('.ou table', { timeout: 20000 }).catch(() => {});
   await page.waitForTimeout(1500);
   if (name === 'desktop-light') {
     console.log((await page.locator('.ou').innerText()).slice(0, 1800));
@@ -25,7 +25,7 @@ for (const [name, vp, scheme] of [['desktop-light', { width: 1500, height: 900 }
 }
 const p2 = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 p2.on('pageerror', (e) => errors.push(`settings: ${e}`));
-await p2.goto(`${base}/company/settings/org-usage-settings`); await p2.waitForTimeout(3000);
+await p2.goto(`${base}/company/settings/agent-ledger-settings`); await p2.waitForTimeout(3000);
 console.log('SETTINGS', (await p2.locator('body').innerText()).slice(0, 900));
 await p2.screenshot({ path: out + 'settings.png' });
 console.log('ERRORS', errors);
