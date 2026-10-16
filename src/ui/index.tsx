@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
 import { COLUMNS, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
+import { FLAG_HELP } from './flaghelp.ts';
+import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
 
 export { AgentLedgerSettingsPage };
 const PRESETS = ['today', 'yesterday', '7d', '14d', '30d'] as const;
@@ -15,7 +17,7 @@ const COLUMN_TIP: Record<string, string> = { name: 'Click to sort by name', role
 const MODE_TIP: Record<Mode, string> = { own: 'Each row shows only what that agent used itself', sub: 'Manager rows show their own usage plus everyone who reports to them', both: 'Manager rows show the subtree total, with their own usage underneath' };
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-const css = `
+const css = mobileCss + `
 .ou{display:grid;gap:12px;min-width:0;font-size:13px}
 .ou *{box-sizing:border-box}
 .ou button,.ou select,.ou input{font:inherit}
@@ -107,16 +109,6 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
   }
 }
 
-// What each flag means, shown on hover together with the specific detail for that agent.
-const FLAG_HELP: Record<string, { label: string; meaning: string }> = {
-  heavy: { label: 'HEAVY', meaning: 'Heavy spender: this agent uses a large share of all tokens in the range (above the configured limit, or far above the median agent).' },
-  drift: { label: 'DRIFT', meaning: 'Model drift: the agent ran more than one model in this range, for example because its model was changed. Its latest run used the configured model.' },
-  cfg_not_actual: { label: 'CFG≠ACT', meaning: 'Configured model differs from the model actually used: the most recent run did not use the model the agent is configured with.' },
-  low_data: { label: 'LOW DATA', meaning: 'Low data: too few runs with usage in this range to draw conclusions from the numbers.' },
-  unpriced: { label: 'UNPRICED', meaning: 'Unpriced usage: some tokens belong to models with no known price, so the cost is a lower bound. Set a price in the settings page.' },
-  errors: { label: 'ERRORS', meaning: 'Errors: the agent is in an error state, or many of its runs failed or were cancelled in this range.' },
-  tier: { label: 'TIER', meaning: 'Tier mismatch: the tier of the agent\'s model differs from the tier you set for its role.' },
-};
 
 // Instant tooltip for a flag (native title text is slow to appear and easy to miss).
 function FlagChip({ code, severity, detail }: { code: string; severity: string; detail: string }) {
@@ -147,6 +139,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
   const [cols, setCols] = useState<Set<ColumnKey>>(loadCols);
   const [menu, setMenu] = useState(false);
+  const narrow = useNarrow(720);
   const data = result.data;
   const st = useMemo<TableState | null>(() => data ? { expanded: expanded ?? expandedToLevel(data, 3), mode, sort, filters } : null, [data, expanded, mode, sort, filters]);
   const rows: Row[] = useMemo(() => (data && st ? visibleRows(data, st) : []), [data, st]);
@@ -167,6 +160,8 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
 
   return <div className="ou"><style>{css}</style>
     <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent ledger</h1>{data && <PriceBadge data={data} />}</div>
+    {narrow ? <MobileControls range={range} setRange={setRange} custom={custom} setCustom={setCustom} mode={mode} setMode={setMode} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort}
+      adapters={adapters} models={models} tiers={tiers} onExpandAll={() => data && setExpanded(new Set(Object.values(data.nodes).filter((n) => n.children.length).map((n) => n.agentId)))} onCollapse={() => data && setExpanded(expandedToLevel(data, 1))} onCsv={exportCsv} /> : <>
     <div className="bar">
       <div className="grp"><span className="gl" id="ou-range-label">Time range</span><div className="seg" role="group" aria-labelledby="ou-range-label">{PRESETS.map((p) => <button key={p} type="button" title={RANGE_TIP[p]} aria-pressed={range === p} onClick={() => setRange(p)}>{LABEL[p]}</button>)}
         <button type="button" title="Use the From and To dates. Pick both dates first." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div></div>
@@ -187,19 +182,19 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       {tiers.length > 0 && <label className="f" title="Only agents whose model has this tier">Tier <select value={filters.tier} onChange={(e) => setFilters({ ...filters, tier: e.target.value })}><option value="">all</option>{tiers.map((a) => <option key={a}>{a}</option>)}</select></label>}
       <label className="f" title="Only agents that have at least one flag"><input type="checkbox" checked={filters.flagsOnly} onChange={(e) => setFilters({ ...filters, flagsOnly: e.target.checked })} />Anomalies only</label>
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
-    </div>
+    </div></>}
     {result.loading && !data && <p role="status">Loading agent ledger…</p>}
     {result.error && <div role="alert">Agent ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
     {data && st && <>
       {Object.keys(data.errors).length > 0 && <div role="alert" className="badge warn">Some data could not be read: {Object.entries(data.errors).map(([k, v]) => `${k} (${v})`).join('; ')}</div>}
-      <div className="sum">
+      {narrow ? <MobileSummary data={data} delta={delta} /> : <div className="sum">
         <div><b>{fmtTokens(data.totals.tokens)}</b><span>Tokens, {data.range.fromDate} to {data.range.toDate}</span></div>
         <div><b>{fmtCost(data.totals).text}</b><span>API-equivalent cost</span></div>
         <div><b>{Math.round(data.totals.runs).toLocaleString('en-US')}</b><span>Runs</span></div>
         <div><b>{Object.keys(data.nodes).length}</b><span>Live agents · {data.terminated.count} terminated</span></div>
         {delta !== null && <div><b>{delta >= 0 ? '+' : ''}{delta.toFixed(0)}%</b><span>Tokens vs prior period</span></div>}
-      </div>
-      <div className="wrap"><table>
+      </div>}
+      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} /> : <div className="wrap"><table>
         <thead><tr>{visibleCols.map((c) => <th key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`} tabIndex={0} title={COLUMN_TIP[c.key]} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
           onClick={() => header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter') header(c.key); }}>{c.label}</th>)}</tr></thead>
         <tbody>
@@ -219,7 +214,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
           {!isFilteringNow(filters) && <tr><td className="nc"><strong>Total</strong></td>{visibleCols.slice(1).map((c) => <td key={c.key} className={c.numeric ? 'n' : ''}>
             {c.key === 'tokens' ? fmtTokens(data.totals.tokens) : c.key === 'input' ? fmtTokens(data.totals.input) : c.key === 'cached' ? fmtTokens(data.totals.cached) : c.key === 'output' ? fmtTokens(data.totals.output)
               : c.key === 'cost' ? fmtCost(data.totals).text : c.key === 'runs' ? Math.round(data.totals.runs).toLocaleString('en-US') : null}</td>)}</tr>}
-        </tbody></table></div>
+        </tbody></table></div>}
       <div className="note">
         <span>Cost is an API-equivalent estimate in USD at list prices. Subscription plans bill differently, and Paperclip itself records $0.</span>
         <span>Usage rolls up under each agent's current manager.</span>

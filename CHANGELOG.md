@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.2.1
+
+- Phone layout (below 720 px): the wide table becomes a compact list with the name, role, model and flags on the left and tokens and cost on the right. Tap a row for the full details and the written meaning of each flag. Time range is a dropdown, and filters, sort and search sit behind a Filters button. No sideways scrolling.
+
 ## 0.2.0
 
 - Renamed from "Org usage" to "Agent ledger" (plugin id `mzaferyahsi.agent-ledger`, package `paperclip-plugin-agent-ledger`, page route `agent-ledger`). Installs of the old name must be uninstalled first.
