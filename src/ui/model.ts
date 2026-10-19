@@ -72,6 +72,9 @@ export function matches(n: OrgNode, f: Filters): boolean {
 }
 export const isFiltering = (f: Filters) => !!(f.activity || f.adapter || f.model || f.tier || f.flagsOnly || f.q);
 
+/** A manager is open when the user expanded it, or when any filter is on (so the org structure above every match stays visible). */
+export const isOpen = (st: TableState, id: string) => st.expanded.has(id) || isFiltering(st.filters);
+
 export function visibleRows(data: AgentLedgerData, st: TableState): Row[] {
   const rows: Row[] = [];
   const all = Object.values(data.nodes);
@@ -91,7 +94,7 @@ export function visibleRows(data: AgentLedgerData, st: TableState): Row[] {
     const n = data.nodes[id]!;
     if (filtering && !hasMatch(id)) return;
     rows.push({ kind: 'node', node: n, depth, filteredManager: filtering && !matches(n, st.filters) });
-    if (st.expanded.has(id) || (filtering && st.filters.q)) for (const c of n.children) walk(c, depth + 1);
+    if (isOpen(st, id)) for (const c of n.children) walk(c, depth + 1);
   };
   for (const id of data.roots) walk(id, 0);
   if (data.unattached.length) {

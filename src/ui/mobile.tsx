@@ -1,8 +1,9 @@
 // Phone layout: a compact list instead of the wide table, so a name and its numbers are always on screen together.
+import { useHostNavigation } from '@paperclipai/plugin-sdk/ui';
 import { useEffect, useState } from 'react';
 import type { AgentLedgerData, OrgNode } from '../types.ts';
 import { FLAG_HELP } from './flaghelp.ts';
-import { ACTIVITY_FILTERS, ACTIVITY_LABEL, activityOf, fmtAgo, isDisabled, fmtCost, fmtTokens, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, activityOf, fmtAgo, isDisabled, fmtCost, fmtTokens, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
 
 export function useNarrow(maxPx = 720): boolean {
   const query = `(max-width: ${maxPx}px)`;
@@ -23,6 +24,7 @@ export const mobileCss = `
 .ou .m-two{display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center}
 .ou .m-bar .seg{display:flex}.ou .m-bar .seg button{flex:1;min-height:40px}
 .ou .m-bar .btn{min-height:40px}
+.ou a.alink{display:inline-flex;align-items:center;min-height:44px;font-weight:600;color:var(--foreground);text-decoration:underline;text-underline-offset:3px}
 .ou .m-filters{display:grid;gap:10px;padding:12px;border:1px solid var(--border);border-radius:8px}
 .ou .m-filters label.f{display:grid;gap:4px}
 .ou .m-filters label.chk{display:flex;align-items:center;gap:8px;min-height:32px;font-size:14px;color:var(--foreground)}
@@ -109,6 +111,7 @@ function Detail({ n, data }: { n: OrgNode; data: AgentLedgerData }) {
   const mgr = n.children.length > 0;
   const own = n.own, sub = n.subtree;
   const cost = (s: typeof own) => fmtCost(s).text;
+  const nav = useHostNavigation();
   return <div className="mdet">
     <div><h3>Usage</h3><dl>
       <dt>{mgr ? 'Tokens (own)' : 'Tokens'}</dt><dd>{fmtTokens(own.tokens)}</dd>
@@ -117,7 +120,7 @@ function Detail({ n, data }: { n: OrgNode; data: AgentLedgerData }) {
       {mgr && <><dt>Cost est. (with reports)</dt><dd>{cost(sub)}</dd></>}
       <dt>Input / cached / output</dt><dd>{fmtTokens(own.input)} / {fmtTokens(own.cached)} / {fmtTokens(own.output)}</dd>
       <dt>Runs</dt><dd>{Math.round(own.runs).toLocaleString('en-US')}</dd></dl></div>
-    <div><h3>Agent</h3><dl>
+    <div><h3>Agent</h3><p><a className="alink" {...nav.linkProps(`/agents/${n.agentId}/configuration`)}>Open agent settings ›</a></p><dl>
       <dt>Status</dt><dd>{n.status}</dd><dt>Activity</dt><dd>{ACTIVITY_LABEL[activityOf(n)]}, last heartbeat {fmtAgo(n.lastHeartbeatAt)}</dd><dt>Adapter</dt><dd>{n.adapterType}</dd>
       <dt>Reports to</dt><dd>{n.reportsTo ? data.nodes[n.reportsTo]?.name ?? 'terminated agent' : '—'}</dd>
       <dt>Configured model</dt><dd>{n.configuredModel ?? 'none'}</dd>
@@ -138,19 +141,19 @@ export function MobileList({ data, rows, st, flat, toggleTree }: { data: AgentLe
       if (r.kind === 'group') return <li key={`g${i}`} className="mrow"><div className="mdet" style={{ paddingLeft: 12 }}><h3>{r.label}</h3></div></li>;
       if (r.kind === 'terminated') return <li key="term" className="mrow"><div className="mhead"><span /><div className="mmain" style={{ cursor: 'default' }}><span className="mname">Terminated agents ({data.terminated.count})</span><span className="msub">{data.terminated.withUsage} with usage</span></div>
         <span className="mnum"><b>{fmtTokens(data.terminated.own.tokens)}</b><span>{fmtCost(data.terminated.own).text}</span></span></div></li>;
-      const n = r.node, mgr = n.children.length > 0, s = sumsFor(n, st.mode), c = fmtCost(s), isOpen = open.has(n.agentId);
+      const n = r.node, mgr = n.children.length > 0, s = sumsFor(n, st.mode), c = fmtCost(s), detailOpen = open.has(n.agentId);
       const model = n.configuredModel ?? n.actualModels[0]?.model ?? 'no model';
       return <li key={n.agentId} className="mrow">
         <div className="mhead" style={{ paddingLeft: 4 + (flat ? 0 : Math.min(r.depth, 5) * 10) }}>
-          {mgr && !flat ? <button type="button" className="mchev" aria-expanded={st.expanded.has(n.agentId)} aria-label={`${st.expanded.has(n.agentId) ? 'Collapse' : 'Expand'} ${n.name}`} onClick={() => toggleTree(n.agentId)}>{st.expanded.has(n.agentId) ? '▼' : '▶'}</button> : <span className="mchev e" />}
-          <button type="button" className="mmain" aria-expanded={isOpen} onClick={() => flip(n.agentId)}>
+          {mgr && !flat ? <button type="button" className="mchev" aria-expanded={isOpen(st, n.agentId)} aria-label={`${isOpen(st, n.agentId) ? 'Collapse' : 'Expand'} ${n.name}`} onClick={() => toggleTree(n.agentId)}>{isOpen(st, n.agentId) ? '▼' : '▶'}</button> : <span className="mchev e" />}
+          <button type="button" className="mmain" aria-expanded={detailOpen} onClick={() => flip(n.agentId)}>
             <span className={`mname${isDisabled(n) ? ' off' : ''}`}>{n.name}</span>
             <span className="msub">{n.title ?? n.role} · {model}</span>
             {n.flags.length > 0 && <span className="mflags">{n.flags.map((f) => <span key={f.code} className={`flag ${f.severity}`}>{FLAG_HELP[f.code]?.label ?? f.code}</span>)}</span>}
           </button>
           <span className="mnum"><b>{fmtTokens(s.tokens)}</b><span>{c.text}</span></span>
         </div>
-        {isOpen && <Detail n={n} data={data} />}
+        {detailOpen && <Detail n={n} data={data} />}
       </li>;
     })}
   </ul>;

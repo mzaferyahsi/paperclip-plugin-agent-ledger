@@ -2,7 +2,7 @@ import { useHostNavigation, usePluginData } from '@paperclipai/plugin-sdk/ui';
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
 import { useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
-import { ACTIVITY_FILTERS, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
 import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
@@ -52,6 +52,7 @@ const css = mobileCss + `
 .ou .own{display:block;color:var(--muted-foreground);font-size:10.5px}
 .ou .dim{color:var(--muted-foreground)}
 .ou .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--muted-foreground)}
+.ou a.nlink{color:inherit;text-decoration:none}.ou a.nlink:hover strong,.ou a.nlink:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
 .ou strong.off,.ou .mname.off{color:var(--muted-foreground);font-weight:500}.ou .dot.quiet,.ou .dot.active{background:#2563eb}.ou .dot.running{background:#16a34a}.ou .dot.paused{background:#d97706}.ou .dot.error{background:var(--destructive)}
 .ou .mo{font-family:${mono};font-size:12px}
 .ou .rc{display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
@@ -74,6 +75,7 @@ function loadCols(): Set<ColumnKey> {
 function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v3', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
 function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void }) {
+  const nav = useHostNavigation();
   const mgr = n.children.length > 0;
   const num = (get: (s: typeof n.own) => number, fmt: (v: number) => string) => {
     const main = fmt(get(sumsFor(n, mode)));
@@ -82,7 +84,7 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
   switch (col) {
     case 'name': return <span style={{ paddingLeft: flat ? 0 : depth * 18 }}>
       {!flat && mgr ? <button type="button" className="chev" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${n.name}`} onClick={toggle}>{open ? '▼' : '▶'}</button> : <span className="chev e">▶</span>}
-      <strong className={isDisabled(n) ? 'off' : undefined} title={isDisabled(n) ? 'Paused (disabled)' : undefined}>{n.name}</strong></span>;
+      <a className="nlink" {...nav.linkProps(`/agents/${n.agentId}/configuration`)} title={isDisabled(n) ? 'Paused (disabled). Open agent settings' : 'Open agent settings'}><strong className={isDisabled(n) ? 'off' : undefined}>{n.name}</strong></a></span>;
     case 'role': return <span className="dim rc" title={n.title ?? n.role}>{n.title ?? n.role}</span>;
     case 'activity': { const a = activityOf(n); return <><span className={`dot ${a}`} />{ACTIVITY_LABEL[a]} <span className="dim">· {fmtAgo(n.lastHeartbeatAt)}</span></>; }
     case 'status': return <><span className={`dot ${n.status}`} />{n.status}</>;
@@ -210,7 +212,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
                 : c.key === 'output' ? fmtTokens(data.terminated.own.output) : c.key === 'runs' ? Math.round(data.terminated.own.runs).toLocaleString('en-US') : c.key === 'cost' ? fmtCost(data.terminated.own).text : null}</td>)}</tr>;
             const n = r.node;
             return <tr key={n.agentId} className={n.children.length && !flat ? 'm' : ''}>{visibleCols.map((c) => <td key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`}>
-              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={st.expanded.has(n.agentId)} toggle={() => toggle(n.agentId)} />
+              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} />
               {c.key === 'name' && r.filteredManager && <span className="dim" style={{ marginLeft: 6, fontSize: 10 }}>(filtered: totals include the full subtree)</span>}</td>)}</tr>;
           })}
           {!isFilteringNow(filters) && <tr><td className="nc"><strong>Total</strong></td>{visibleCols.slice(1).map((c) => <td key={c.key} className={c.numeric ? 'n' : ''}>

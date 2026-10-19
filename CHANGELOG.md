@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.2.4
+
+- Agent names link to the agent settings page; the phone detail view has an Open agent settings link.
+- Any filter keeps the org tree open and indented, so the structure above each match stays visible.
+
 ## 0.2.3
 
 - Activity column and filter (running now, active in range, no runs, paused, error), sortable, with last heartbeat.

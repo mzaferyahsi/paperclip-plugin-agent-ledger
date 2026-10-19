@@ -131,6 +131,10 @@ test('ui model: expand/collapse, filters keep ancestors, sort flattens, csv', ()
   const found = visibleRows(data, st({ filters: { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: 'gamma' } })).filter((r) => r.kind === 'node');
   assert.equal(found.length, 3, 'search auto-expands the ancestors of a match');
   assert.equal(found.filter((r) => r.kind === 'node' && r.filteredManager).length, 2);
+  const o2 = build([agent('a', 'Alpha', null, 'running'), agent('b', 'Beta', 'a', 'running'), agent('c', 'Gamma', 'b', 'running')], []);
+  const d2 = { ...o2, generatedAt: '', pluginVersion: '', pricing: {} as never, errors: {} };
+  const act = visibleRows(d2, st({ filters: { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' } })).filter((r) => r.kind === 'node');
+  assert.deepEqual(act.map((r) => r.kind === 'node' && r.depth), [0, 1, 2], 'any filter keeps the org tree open, with indentation');
   const flat = visibleRows(data, st({ sort: { key: 'tokens', dir: -1 } })).filter((r) => r.kind === 'node');
   assert.deepEqual(flat.map((r) => r.kind === 'node' && r.node.name), ['Alpha', 'Beta', 'Gamma'], 'subtree totals sort managers first');
   assert.equal(visibleRows(data, st({ sort: { key: 'tokens', dir: -1 }, mode: 'own' })).filter((r) => r.kind === 'node').map((r) => r.kind === 'node' && r.node.name)[0], 'Gamma');
