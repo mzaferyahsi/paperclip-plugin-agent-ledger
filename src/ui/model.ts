@@ -2,8 +2,8 @@
 import type { OrgNode, AgentLedgerData, Sums } from '../types.ts';
 
 export type Mode = 'own' | 'sub' | 'both';
-export type ColumnKey = 'name' | 'role' | 'status' | 'parent' | 'depth' | 'adapter' | 'model' | 'tier' | 'input' | 'cached' | 'output' | 'tokens' | 'cost' | 'runs' | 'flags';
-export interface Filters { adapter: string; model: string; tier: string; flagsOnly: boolean; q: string }
+export type ColumnKey = 'name' | 'role' | 'activity' | 'status' | 'parent' | 'depth' | 'adapter' | 'model' | 'tier' | 'input' | 'cached' | 'output' | 'tokens' | 'cost' | 'runs' | 'flags';
+export interface Filters { activity: string; adapter: string; model: string; tier: string; flagsOnly: boolean; q: string }
 export interface TableState { expanded: Set<string>; mode: Mode; sort: { key: ColumnKey; dir: 1 | -1 } | null; filters: Filters }
 export type Row =
   | { kind: 'node'; node: OrgNode; depth: number; filteredManager: boolean }
@@ -12,7 +12,7 @@ export type Row =
 
 export const COLUMNS: Array<{ key: ColumnKey; label: string; numeric: boolean; defaultOn: boolean }> = [
   { key: 'name', label: 'Name', numeric: false, defaultOn: true }, { key: 'role', label: 'Role', numeric: false, defaultOn: true },
-  { key: 'status', label: 'Status', numeric: false, defaultOn: false }, { key: 'parent', label: 'Reports to', numeric: false, defaultOn: false },
+  { key: 'activity', label: 'Activity', numeric: false, defaultOn: true }, { key: 'status', label: 'Status', numeric: false, defaultOn: false }, { key: 'parent', label: 'Reports to', numeric: false, defaultOn: false },
   { key: 'depth', label: 'D', numeric: true, defaultOn: false }, { key: 'adapter', label: 'Adapter', numeric: false, defaultOn: true },
   { key: 'model', label: 'Model', numeric: false, defaultOn: true }, { key: 'tier', label: 'Tier', numeric: false, defaultOn: true },
   { key: 'tokens', label: 'Total', numeric: true, defaultOn: true }, { key: 'cost', label: 'Cost est.', numeric: true, defaultOn: true },
@@ -21,6 +21,26 @@ export const COLUMNS: Array<{ key: ColumnKey; label: string; numeric: boolean; d
   { key: 'flags', label: 'Flags', numeric: false, defaultOn: true },
 ];
 
+export type Activity = 'running' | 'active' | 'quiet' | 'paused' | 'error';
+export const ACTIVITY_LABEL: Record<Activity, string> = { running: 'Running now', active: 'Active', quiet: 'No runs', paused: 'Paused', error: 'Error' };
+export const ACTIVITY_FILTERS: Array<{ value: string; label: string }> = [
+  { value: 'live', label: 'Running or active' }, { value: 'running', label: 'Running now' }, { value: 'active', label: 'Active in range' },
+  { value: 'quiet', label: 'No runs in range' }, { value: 'paused', label: 'Paused (disabled)' }, { value: 'error', label: 'Error' }];
+const ACTIVITY_RANK: Record<Activity, number> = { running: 0, active: 1, quiet: 2, paused: 3, error: 4 };
+export function activityOf(n: OrgNode): Activity {
+  if (n.status === 'paused' || n.status === 'pending_approval') return 'paused';
+  if (n.status === 'error') return 'error';
+  if (n.status === 'running') return 'running';
+  return n.own.runsTotal > 0 ? 'active' : 'quiet';
+}
+export const isDisabled = (n: OrgNode) => activityOf(n) === 'paused';
+export function fmtAgo(iso: string | null, now = Date.now()): string {
+  if (!iso) return 'never';
+  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
+  if (s < 90) return 'just now'; if (s < 5400) return `${Math.round(s / 60)}m ago`;
+  if (s < 129600) return `${Math.round(s / 3600)}h ago`; return `${Math.round(s / 86400)}d ago`;
+}
+
 export const sumsFor = (n: OrgNode, mode: Mode): Sums => (mode === 'own' || n.children.length === 0 ? n.own : n.subtree);
 
 export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLedgerData): number | string {
@@ -28,6 +48,7 @@ export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLed
   switch (key) {
     case 'name': return n.name.toLowerCase();
     case 'role': return (n.title ?? n.role).toLowerCase();
+    case 'activity': return ACTIVITY_RANK[activityOf(n)];
     case 'status': return n.status;
     case 'parent': return n.reportsTo ? (data.nodes[n.reportsTo]?.name ?? '').toLowerCase() : '';
     case 'depth': return n.depth;
@@ -41,6 +62,7 @@ export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLed
 }
 
 export function matches(n: OrgNode, f: Filters): boolean {
+  if (f.activity) { const a = activityOf(n); if (f.activity === 'live' ? a !== 'running' && a !== 'active' : a !== f.activity) return false; }
   if (f.adapter && n.adapterType !== f.adapter) return false;
   if (f.model && n.configuredModel !== f.model && !n.actualModels.some((m) => m.model === f.model)) return false;
   if (f.tier && n.tier?.configured !== f.tier) return false;
@@ -48,7 +70,7 @@ export function matches(n: OrgNode, f: Filters): boolean {
   if (f.q && !n.name.toLowerCase().includes(f.q.toLowerCase())) return false;
   return true;
 }
-export const isFiltering = (f: Filters) => !!(f.adapter || f.model || f.tier || f.flagsOnly || f.q);
+export const isFiltering = (f: Filters) => !!(f.activity || f.adapter || f.model || f.tier || f.flagsOnly || f.q);
 
 export function visibleRows(data: AgentLedgerData, st: TableState): Row[] {
   const rows: Row[] = [];
@@ -108,12 +130,12 @@ export function fmtCost(s: Sums): { text: string; partial: boolean; none: boolea
 
 export function toCsv(data: AgentLedgerData, rows: Row[], mode: Mode): string {
   const q = (v: unknown) => { const s = String(v ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
-  const head = ['name', 'role', 'status', 'reports_to', 'depth', 'adapter', 'configured_model', 'actual_models', 'input', 'cached', 'output', 'total', 'cost_usd_est', 'runs', 'flags'];
+  const head = ['name', 'role', 'status', 'activity', 'last_heartbeat', 'reports_to', 'depth', 'adapter', 'configured_model', 'actual_models', 'input', 'cached', 'output', 'total', 'cost_usd_est', 'runs', 'flags'];
   const lines = [`# range ${data.range.fromDate}..${data.range.toDate} ${data.range.timezone}; cost is an API-equivalent estimate in USD; totals shown: ${mode}`, head.join(',')];
   for (const r of rows) {
     if (r.kind !== 'node') continue;
     const n = r.node, s = sumsFor(n, mode);
-    lines.push([n.name, n.title ?? n.role, n.status, n.reportsTo ? data.nodes[n.reportsTo]?.name ?? '' : '', n.depth, n.adapterType, n.configuredModel ?? '',
+    lines.push([n.name, n.title ?? n.role, n.status, ACTIVITY_LABEL[activityOf(n)], n.lastHeartbeatAt ?? '', n.reportsTo ? data.nodes[n.reportsTo]?.name ?? '' : '', n.depth, n.adapterType, n.configuredModel ?? '',
       n.actualModels.map((m) => `${m.model} ${Math.round(m.share * 100)}%`).join('; '), s.input, s.cached, s.output, s.tokens,
       s.pricedTokens > 0 ? (s.costMicro / 1e6).toFixed(4) : '', s.runs, n.flags.map((f) => f.code).join(' ')].map(q).join(','));
   }

@@ -2,7 +2,7 @@ import { useHostNavigation, usePluginData } from '@paperclipai/plugin-sdk/ui';
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
 import { useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
-import { COLUMNS, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { ACTIVITY_FILTERS, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
 import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
@@ -11,7 +11,7 @@ export { AgentLedgerSettingsPage };
 const PRESETS = ['today', 'yesterday', '7d', '14d', '30d'] as const;
 const LABEL: Record<string, string> = { today: 'Today', yesterday: 'Yesterday', '7d': '7 days', '14d': '14 days', '30d': '30 days' };
 const RANGE_TIP: Record<string, string> = { today: 'Usage since midnight today', yesterday: 'Usage during yesterday only', '7d': 'The last 7 days, including today', '14d': 'The last 14 days, including today', '30d': 'The last 30 days, including today' };
-const COLUMN_TIP: Record<string, string> = { name: 'Click to sort by name', role: 'Click to sort by role', status: 'Click to sort by status', parent: 'Who the agent reports to', depth: 'Level in the organisation, 0 is the top',
+const COLUMN_TIP: Record<string, string> = { name: 'Click to sort by name', role: 'Click to sort by role', activity: 'Running, active (ran in this range), no runs, or paused. Click to sort.', status: 'Click to sort by status', parent: 'Who the agent reports to', depth: 'Level in the organisation, 0 is the top',
   adapter: 'How the agent runs', model: 'The model the agent is configured with. Hover a row to see every model it used.', tier: 'Tier of the agent model, as you defined it in settings',
   tokens: 'Input, cached and output tokens together', cost: 'Estimated cost at public API list prices', runs: 'Runs with recorded usage', input: 'Input tokens, not counting cached tokens', cached: 'Input tokens served from the cache', output: 'Output tokens', flags: 'Things worth a look. Hover a flag for its meaning.' };
 const MODE_TIP: Record<Mode, string> = { own: 'Each row shows only what that agent used itself', sub: 'Manager rows show their own usage plus everyone who reports to them', both: 'Manager rows show the subtree total, with their own usage underneath' };
@@ -52,7 +52,7 @@ const css = mobileCss + `
 .ou .own{display:block;color:var(--muted-foreground);font-size:10.5px}
 .ou .dim{color:var(--muted-foreground)}
 .ou .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--muted-foreground)}
-.ou .dot.running{background:#16a34a}.ou .dot.paused{background:#d97706}.ou .dot.error{background:var(--destructive)}
+.ou strong.off,.ou .mname.off{color:var(--muted-foreground);font-weight:500}.ou .dot.quiet,.ou .dot.active{background:#2563eb}.ou .dot.running{background:#16a34a}.ou .dot.paused{background:#d97706}.ou .dot.error{background:var(--destructive)}
 .ou .mo{font-family:${mono};font-size:12px}
 .ou .rc{display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
 .ou .mc{display:inline-block;max-width:330px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
@@ -65,13 +65,13 @@ const css = mobileCss + `
 .ou .grp td{background:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground)}
 `;
 
-const initialFilters: Filters = { adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
+const initialFilters: Filters = { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
 
 function loadCols(): Set<ColumnKey> {
-  try { const raw = localStorage.getItem('agent-ledger.columns.v2'); if (raw) return new Set(JSON.parse(raw) as ColumnKey[]); } catch { /* storage unavailable */ }
+  try { const raw = localStorage.getItem('agent-ledger.columns.v3'); if (raw) return new Set(JSON.parse(raw) as ColumnKey[]); } catch { /* storage unavailable */ }
   return new Set(COLUMNS.filter((c) => c.defaultOn).map((c) => c.key));
 }
-function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v2', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
+function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v3', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
 function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void }) {
   const mgr = n.children.length > 0;
@@ -82,8 +82,9 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
   switch (col) {
     case 'name': return <span style={{ paddingLeft: flat ? 0 : depth * 18 }}>
       {!flat && mgr ? <button type="button" className="chev" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${n.name}`} onClick={toggle}>{open ? '▼' : '▶'}</button> : <span className="chev e">▶</span>}
-      <strong>{n.name}</strong></span>;
+      <strong className={isDisabled(n) ? 'off' : undefined} title={isDisabled(n) ? 'Paused (disabled)' : undefined}>{n.name}</strong></span>;
     case 'role': return <span className="dim rc" title={n.title ?? n.role}>{n.title ?? n.role}</span>;
+    case 'activity': { const a = activityOf(n); return <><span className={`dot ${a}`} />{ACTIVITY_LABEL[a]} <span className="dim">· {fmtAgo(n.lastHeartbeatAt)}</span></>; }
     case 'status': return <><span className={`dot ${n.status}`} />{n.status}</>;
     case 'parent': return n.reportsTo ? <>{data.nodes[n.reportsTo]?.name ?? <span className="dim">terminated</span>}</> : <span className="dim">—</span>;
     case 'depth': return <span className="mo">{n.depth}</span>;
@@ -177,6 +178,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       <button type="button" className="btn" onClick={exportCsv} title="Copies the visible rows as CSV">Copy CSV</button>
     </div>
     <div className="bar">
+      <label className="f" title="Filter by whether the agent is running, ran in this range, or is paused">Activity <select value={filters.activity} onChange={(e) => setFilters({ ...filters, activity: e.target.value })}><option value="">all</option>{ACTIVITY_FILTERS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
       <label className="f" title="Only agents that run on this adapter">Adapter <select value={filters.adapter} onChange={(e) => setFilters({ ...filters, adapter: e.target.value })}><option value="">all</option>{adapters.map((a) => <option key={a}>{a}</option>)}</select></label>
       <label className="f" title="Only agents configured with, or that ran, this model">Model <select value={filters.model} onChange={(e) => setFilters({ ...filters, model: e.target.value })}><option value="">all</option>{models.map((a) => <option key={a}>{a}</option>)}</select></label>
       {tiers.length > 0 && <label className="f" title="Only agents whose model has this tier">Tier <select value={filters.tier} onChange={(e) => setFilters({ ...filters, tier: e.target.value })}><option value="">all</option>{tiers.map((a) => <option key={a}>{a}</option>)}</select></label>}
@@ -225,7 +227,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       </div></>}
   </div>;
 }
-const isFilteringNow = (f: Filters) => !!(f.adapter || f.model || f.tier || f.flagsOnly || f.q);
+const isFilteringNow = (f: Filters) => !!(f.activity || f.adapter || f.model || f.tier || f.flagsOnly || f.q);
 
 // Matches the host's own sidebar items: 80% foreground, 6px 8px padding, 10px gap, rounded, accent background on hover.
 export function AgentLedgerSidebarItem(_props: PluginSidebarProps) {

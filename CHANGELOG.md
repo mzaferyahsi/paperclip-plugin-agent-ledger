@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.2.3
+
+- Activity column and filter (running now, active in range, no runs, paused, error), sortable, with last heartbeat.
+- Names of paused (disabled) agents are shown in a muted colour.
+
 ## 0.2.2
 
 - Names use title case like the rest of Paperclip: "Agent Ledger" in the sidebar, page title and settings.

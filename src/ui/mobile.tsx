@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { AgentLedgerData, OrgNode } from '../types.ts';
 import { FLAG_HELP } from './flaghelp.ts';
-import { fmtCost, fmtTokens, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { ACTIVITY_FILTERS, ACTIVITY_LABEL, activityOf, fmtAgo, isDisabled, fmtCost, fmtTokens, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
 
 export function useNarrow(maxPx = 720): boolean {
   const query = `(max-width: ${maxPx}px)`;
@@ -69,7 +69,7 @@ export function MobileControls(p: MobileControlsProps) {
   const [pickCustom, setPickCustom] = useState(typeof p.range === 'object');
   const rangeValue = pickCustom || typeof p.range === 'object' ? 'custom' : p.range;
   const sortValue = SORTS.find(([, , s]) => (s === null ? p.sort === null : p.sort?.key === s.key && p.sort.dir === s.dir))?.[0] ?? 'hier';
-  const active = [p.filters.adapter, p.filters.model, p.filters.tier, p.filters.flagsOnly, p.filters.q].filter(Boolean).length;
+  const active = [p.filters.activity, p.filters.adapter, p.filters.model, p.filters.tier, p.filters.flagsOnly, p.filters.q].filter(Boolean).length;
   return <div className="m-bar">
     <div className="m-two">
       <select aria-label="Time range" value={rangeValue} onChange={(e) => { if (e.target.value === 'custom') setPickCustom(true); else { setPickCustom(false); p.setRange(e.target.value); } }}>
@@ -85,6 +85,7 @@ export function MobileControls(p: MobileControlsProps) {
     {open && <div className="m-filters">
       <label className="f">Sort by <select value={sortValue} onChange={(e) => p.setSort(SORTS.find(([v]) => v === e.target.value)?.[2] ?? null)}>{SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></label>
       <label className="f">Search <input type="search" value={p.filters.q} placeholder="agent name" onChange={(e) => p.setFilters({ ...p.filters, q: e.target.value })} /></label>
+      <label className="f">Activity <select value={p.filters.activity} onChange={(e) => p.setFilters({ ...p.filters, activity: e.target.value })}><option value="">all</option>{ACTIVITY_FILTERS.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}</select></label>
       <label className="f">Adapter <select value={p.filters.adapter} onChange={(e) => p.setFilters({ ...p.filters, adapter: e.target.value })}><option value="">all</option>{p.adapters.map((a) => <option key={a}>{a}</option>)}</select></label>
       <label className="f">Model <select value={p.filters.model} onChange={(e) => p.setFilters({ ...p.filters, model: e.target.value })}><option value="">all</option>{p.models.map((a) => <option key={a}>{a}</option>)}</select></label>
       {p.tiers.length > 0 && <label className="f">Tier <select value={p.filters.tier} onChange={(e) => p.setFilters({ ...p.filters, tier: e.target.value })}><option value="">all</option>{p.tiers.map((a) => <option key={a}>{a}</option>)}</select></label>}
@@ -117,7 +118,7 @@ function Detail({ n, data }: { n: OrgNode; data: AgentLedgerData }) {
       <dt>Input / cached / output</dt><dd>{fmtTokens(own.input)} / {fmtTokens(own.cached)} / {fmtTokens(own.output)}</dd>
       <dt>Runs</dt><dd>{Math.round(own.runs).toLocaleString('en-US')}</dd></dl></div>
     <div><h3>Agent</h3><dl>
-      <dt>Status</dt><dd>{n.status}</dd><dt>Adapter</dt><dd>{n.adapterType}</dd>
+      <dt>Status</dt><dd>{n.status}</dd><dt>Activity</dt><dd>{ACTIVITY_LABEL[activityOf(n)]}, last heartbeat {fmtAgo(n.lastHeartbeatAt)}</dd><dt>Adapter</dt><dd>{n.adapterType}</dd>
       <dt>Reports to</dt><dd>{n.reportsTo ? data.nodes[n.reportsTo]?.name ?? 'terminated agent' : '—'}</dd>
       <dt>Configured model</dt><dd>{n.configuredModel ?? 'none'}</dd>
       {n.tier?.configured && <><dt>Tier</dt><dd>{n.tier.configured}</dd></>}</dl></div>
@@ -143,7 +144,7 @@ export function MobileList({ data, rows, st, flat, toggleTree }: { data: AgentLe
         <div className="mhead" style={{ paddingLeft: 4 + (flat ? 0 : Math.min(r.depth, 5) * 10) }}>
           {mgr && !flat ? <button type="button" className="mchev" aria-expanded={st.expanded.has(n.agentId)} aria-label={`${st.expanded.has(n.agentId) ? 'Collapse' : 'Expand'} ${n.name}`} onClick={() => toggleTree(n.agentId)}>{st.expanded.has(n.agentId) ? '▼' : '▶'}</button> : <span className="mchev e" />}
           <button type="button" className="mmain" aria-expanded={isOpen} onClick={() => flip(n.agentId)}>
-            <span className="mname">{n.name}</span>
+            <span className={`mname${isDisabled(n) ? ' off' : ''}`}>{n.name}</span>
             <span className="msub">{n.title ?? n.role} · {model}</span>
             {n.flags.length > 0 && <span className="mflags">{n.flags.map((f) => <span key={f.code} className={`flag ${f.severity}`}>{FLAG_HELP[f.code]?.label ?? f.code}</span>)}</span>}
           </button>

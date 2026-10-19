@@ -125,10 +125,10 @@ test('config and rules are validated, defaults are generic', () => {
 test('ui model: expand/collapse, filters keep ancestors, sort flattens, csv', () => {
   const o = build([agent('a', 'Alpha', null), agent('b', 'Beta', 'a'), agent('c', 'Gamma', 'b')], [usage('a', 1), usage('b', 2), usage('c', 30)]);
   const data = { ...o, generatedAt: '', pluginVersion: '', pricing: {} as never, errors: {} };
-  const st = (over: Partial<TableState>): TableState => ({ expanded: new Set(), mode: 'both', sort: null, filters: { adapter: '', model: '', tier: '', flagsOnly: false, q: '' }, ...over });
+  const st = (over: Partial<TableState>): TableState => ({ expanded: new Set(), mode: 'both', sort: null, filters: { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: '' }, ...over });
   assert.equal(visibleRows(data, st({})).filter((r) => r.kind === 'node').length, 1);
   assert.equal(visibleRows(data, st({ expanded: expandedToLevel(data, 3) })).filter((r) => r.kind === 'node').length, 3);
-  const found = visibleRows(data, st({ filters: { adapter: '', model: '', tier: '', flagsOnly: false, q: 'gamma' } })).filter((r) => r.kind === 'node');
+  const found = visibleRows(data, st({ filters: { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: 'gamma' } })).filter((r) => r.kind === 'node');
   assert.equal(found.length, 3, 'search auto-expands the ancestors of a match');
   assert.equal(found.filter((r) => r.kind === 'node' && r.filteredManager).length, 2);
   const flat = visibleRows(data, st({ sort: { key: 'tokens', dir: -1 } })).filter((r) => r.kind === 'node');
@@ -165,4 +165,20 @@ test('bundled snapshot is present, sane and recent', () => {
   const age = (Date.now() - Date.parse(snapshot.date)) / 86_400_000;
   assert.ok(age < 120, `snapshot is ${Math.round(age)} days old; run npm run update-snapshot before releasing`);
   for (const r of snapshot.rows as unknown[][]) assert.ok(typeof r[0] === 'string' && typeof r[1] === 'string' && Number.isFinite(r[2] as number) && Number.isFinite(r[5] as number));
+});
+
+test('activity states, filter and sort rank', async () => {
+  const { activityOf, matches, isDisabled, fmtAgo } = await import('../src/ui/model.ts');
+  const mk = (status: string, runsTotal: number) => ({ status, own: { runsTotal } }) as never;
+  assert.equal(activityOf(mk('running', 0)), 'running');
+  assert.equal(activityOf(mk('idle', 3)), 'active');
+  assert.equal(activityOf(mk('idle', 0)), 'quiet');
+  assert.equal(activityOf(mk('paused', 9)), 'paused');
+  assert.equal(isDisabled(mk('paused', 0)), true);
+  assert.equal(isDisabled(mk('idle', 0)), false);
+  const f = { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
+  assert.equal(matches(mk('idle', 2), f), true);
+  assert.equal(matches(mk('idle', 0), f), false);
+  assert.equal(matches(mk('paused', 2), f), false);
+  assert.equal(fmtAgo(null), 'never');
 });
