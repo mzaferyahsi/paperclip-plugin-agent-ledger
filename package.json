@@ -1,6 +1,6 @@
 {
   "name": "paperclip-plugin-agent-ledger",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Paperclip plugin: agent reporting hierarchy with configured and actual models, token usage and API-equivalent cost, as one table.",
   "license": "MIT",
   "private": false,

@@ -131,4 +131,17 @@ test('refresh: concurrent runs are blocked by the lease', async (t) => {
   const mk = (n: number) => refreshPrices({ db: pg!, config: { sources: ['litellm'] as never, holdPercent: 50 }, uuid, http: httpFor({ 'raw.githubusercontent.com': litellm(10) }), now: () => new Date(NOW + 9e9 + n) });
   const [a, b] = await Promise.all([mk(1), mk(2)]);
   assert.equal([a, b].filter((r) => r.ran).length >= 1, true);
+});test('inclusive providers: input already without the cached part (cached > input) is kept, not zeroed', async (t) => {
+  if (!pg) return t.skip('no postgres');
+  const { usageQuery } = await import('../src/sql.ts');
+  const ins = (model: string, input: number, cached: number) => pg!.query(`INSERT INTO public.cost_events (company_id, agent_id, heartbeat_run_id, provider, model, input_tokens, cached_input_tokens, output_tokens, occurred_at) VALUES ($1,$2,$3,'openai',$4,$5,$6,1,'2026-09-01T10:00:00Z')`, [C, id(3), uuid(), model, input, cached]);
+  await ins('incl-model', 3000, 2000);   // newer Codex runs: input includes cached, uncached = 1000
+  await ins('excl-model', 1000, 5000);   // older Codex and OpenCode runs: input already uncached
+  const q = usageQuery(C, '2026-09-01T00:00:00Z', '2026-09-02T00:00:00Z', ['openai']);
+  const rows = await pg!.query<{ model: string; input: string }>(q.sql, q.params);
+  assert.equal(Number(rows.find((r) => r.model === 'incl-model')!.input), 1000);
+  assert.equal(Number(rows.find((r) => r.model === 'excl-model')!.input), 1000);
+  await pg!.query("DELETE FROM public.cost_events WHERE occurred_at < '2026-09-02'");
 });
+
+

@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.2.5
+
+- Fix: older OpenAI usage records (before about 10 Oct 2026, from Codex and OpenCode) report input tokens without the cached part, newer ones with it. The plugin treated all as including it and subtracted the cached part, which zeroed the input of the older ones (about 2.8 million input tokens in October). An event whose cached tokens exceed its input is now kept as reported.
+
 ## 0.2.4
 
 - Agent names link to the agent settings page; the phone detail view has an Open agent settings link.

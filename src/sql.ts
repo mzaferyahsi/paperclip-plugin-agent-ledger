@@ -20,7 +20,7 @@ export function usageQuery(companyId: string, fromIso: string, toIso: string, in
   return {
     sql: `SELECT ce.agent_id::text AS agent_id, ce.provider, ce.model, ce.billing_type,
   floor(date_part('epoch', ce.occurred_at) / 3600)::bigint AS hour,
-  SUM(CASE WHEN ce.provider = ANY(ARRAY(SELECT jsonb_array_elements_text($4::jsonb))) THEN GREATEST(0, ce.input_tokens - ce.cached_input_tokens) ELSE ce.input_tokens END)::bigint AS input,
+  SUM(CASE WHEN ce.provider = ANY(ARRAY(SELECT jsonb_array_elements_text($4::jsonb))) THEN CASE WHEN ce.cached_input_tokens <= ce.input_tokens THEN ce.input_tokens - ce.cached_input_tokens ELSE ce.input_tokens END ELSE ce.input_tokens END)::bigint AS input,
   SUM(ce.cached_input_tokens)::bigint AS cached,
   SUM(ce.output_tokens)::bigint AS output,
   COUNT(DISTINCT ce.heartbeat_run_id)::bigint AS runs
