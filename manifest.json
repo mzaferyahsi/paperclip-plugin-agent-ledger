@@ -1,7 +1,7 @@
 {
   "id": "mzaferyahsi.agent-ledger",
   "apiVersion": 1,
-  "version": "0.2.5",
+  "version": "0.3.0",
   "minimumHostVersion": "2026.1012.0",
   "displayName": "Agent Ledger",
   "description": "Reporting hierarchy, configured and actual models, token usage and API-equivalent cost per agent and per subtree. Prices refresh daily from public price lists; no agent is involved.",
@@ -12,6 +12,7 @@
     "database.namespace.write",
     "database.namespace.migrate",
     "jobs.schedule",
+    "agents.invoke",
     "http.outbound",
     "instance.settings.register",
     "ui.page.register",

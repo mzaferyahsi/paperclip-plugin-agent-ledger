@@ -1,8 +1,8 @@
-import { useHostNavigation, usePluginData } from '@paperclipai/plugin-sdk/ui';
+import { useHostNavigation, usePluginAction, usePluginData } from '@paperclipai/plugin-sdk/ui';
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
-import { ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { INITIAL_FILTERS, MAX_RUN, RUN_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
 import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
@@ -63,10 +63,12 @@ const css = mobileCss + `
 .ou .note{color:var(--muted-foreground);font-size:11.5px;display:flex;flex-wrap:wrap;gap:4px 18px}
 .ou .badge{display:inline-block;padding:1px 8px;border-radius:999px;border:1px solid var(--border);font-size:11px}
 .ou .badge.warn{color:#b45309;border-color:#b45309}
+.ou .runb{padding:2px 10px;min-height:26px}
+.ou .confirm{border:1px solid var(--border);border-radius:8px;padding:10px 14px;background:var(--card, var(--background));max-width:560px}
 .ou .grp td{background:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted-foreground)}
 `;
 
-const initialFilters: Filters = { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
+const initialFilters: Filters = INITIAL_FILTERS;
 
 function loadCols(): Set<ColumnKey> {
   try { const raw = localStorage.getItem('agent-ledger.columns.v3'); if (raw) return new Set(JSON.parse(raw) as ColumnKey[]); } catch { /* storage unavailable */ }
@@ -74,7 +76,7 @@ function loadCols(): Set<ColumnKey> {
 }
 function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v3', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
-function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void }) {
+function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void; onRun: () => void }) {
   const nav = useHostNavigation();
   const mgr = n.children.length > 0;
   const num = (get: (s: typeof n.own) => number, fmt: (v: number) => string) => {
@@ -109,9 +111,22 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle }: { n:
     }
     case 'runs': return <span className="n">{num((s) => s.runs, (v) => Math.round(v).toLocaleString('en-US'))}</span>;
     case 'flags': return <>{n.flags.map((f) => <FlagChip key={f.code} code={f.code} severity={f.severity} detail={f.detail} />)}</>;
+    case 'run': return isRunnable(n) ? <button type="button" className="btn runb" title={`Start a run for ${n.name} now`} onClick={onRun}>Run</button> : <span className="dim" title={n.status === 'running' ? 'Already running' : 'Paused agents cannot run'}>{n.status === 'running' ? 'Running' : '—'}</span>;
   }
 }
 
+
+/** Start runs from the page: one button for the agents shown, a confirm step that names them, and what happened afterwards. */
+function RunBar({ shown, pending, busy, msg, onAsk, onConfirm, onCancel, onDismiss }: { shown: number; pending: OrgNode[] | null; busy: boolean; msg: string | null; onAsk: () => void; onConfirm: () => void; onCancel: () => void; onDismiss: () => void }) {
+  return <div className="bar" style={{ alignItems: 'flex-start' }}>
+    {!pending && <button type="button" className="btn" disabled={shown === 0} title={shown ? `Start a run for the agents shown that are idle${shown > MAX_RUN ? ` (the first ${MAX_RUN})` : ''}. You confirm first.` : 'No agent shown can run: they are running, paused, or filtered out'} onClick={onAsk}>Run Agents Shown ({Math.min(shown, MAX_RUN)}{shown > MAX_RUN ? ` of ${shown}` : ''})</button>}
+    {pending && <div role="alertdialog" aria-label="Confirm run" className="confirm"><div><strong>Run {pending.length} agent{pending.length === 1 ? '' : 's'} now?</strong></div>
+      <div className="dim">{pending.map((n) => n.name).join(', ')}</div>
+      <div className="dim">Each agent starts a run at once and spends tokens from its plan. A manual run has no assigned task, so it only checks the agent's inbox.</div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}><button type="button" className="btn" disabled={busy} onClick={onConfirm}>{busy ? 'Starting…' : 'Run Now'}</button><button type="button" className="btn" disabled={busy} onClick={onCancel}>Cancel</button></div></div>}
+    {msg && <span role="status" className="badge">{msg} <button type="button" className="btn runb" aria-label="Dismiss" onClick={onDismiss}>×</button></span>}
+  </div>;
+}
 
 // Instant tooltip for a flag (native title text is slow to appear and easy to miss).
 function FlagChip({ code, severity, detail }: { code: string; severity: string; detail: string }) {
@@ -142,16 +157,33 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
   const [cols, setCols] = useState<Set<ColumnKey>>(loadCols);
   const [menu, setMenu] = useState(false);
+  const run = usePluginAction('agents.run'), whoami = usePluginAction('viewer');
+  const [isBoard, setIsBoard] = useState(false), [pending, setPending] = useState<OrgNode[] | null>(null), [runBusy, setRunBusy] = useState(false), [runMsg, setRunMsg] = useState<string | null>(null);
+  useEffect(() => { whoami({}).then((r) => setIsBoard(!!(r as { isBoard?: boolean })?.isBoard)).catch(() => setIsBoard(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const narrow = useNarrow(720);
   const data = result.data;
   const st = useMemo<TableState | null>(() => data ? { expanded: expanded ?? expandedToLevel(data, 3), mode, sort, filters } : null, [data, expanded, mode, sort, filters]);
   const rows: Row[] = useMemo(() => (data && st ? visibleRows(data, st) : []), [data, st]);
-  const visibleCols = COLUMNS.filter((c) => cols.has(c.key) && (c.key !== 'tier' || data?.tiersConfigured));
+  const visibleCols = [...COLUMNS.filter((c) => cols.has(c.key) && (c.key !== 'tier' || data?.tiersConfigured)), ...(isBoard ? [RUN_COL] : [])];
   const maxTokens = Math.max(1, ...Object.values(data?.nodes ?? {}).map((n) => sumsFor(n, mode).tokens));
   const adapters = [...new Set(Object.values(data?.nodes ?? {}).map((n) => n.adapterType))].sort();
   const models = [...new Set(Object.values(data?.nodes ?? {}).flatMap((n) => [n.configuredModel, ...n.actualModels.map((m) => m.model)]).filter((x): x is string => !!x))].sort();
   const tiers = [...new Set(Object.values(data?.nodes ?? {}).map((n) => n.tier?.configured).filter((x): x is string => !!x))].sort();
   const flat = !!sort;
+  const runnableShown = rows.flatMap((r) => (r.kind === 'node' && isRunnable(r.node) ? [r.node] : []));
+  const askRun = (nodes: OrgNode[]) => { setRunMsg(null); setPending(nodes.slice(0, MAX_RUN)); };
+  const confirmRun = async () => {
+    if (!pending) return;
+    setRunBusy(true);
+    try {
+      const r = (await run({ companyId: context.companyId, agentIds: pending.map((n) => n.agentId) })) as { results: Array<{ name: string; started: boolean; reason: string | null }> };
+      const ok = r.results.filter((x) => x.started).length, bad = r.results.filter((x) => !x.started);
+      setRunMsg(`Started ${ok} of ${r.results.length} run${r.results.length === 1 ? '' : 's'}.${bad.length ? ` Not started: ${bad.map((b) => `${b.name} (${b.reason})`).join('; ')}.` : ''}`);
+      setPending(null);
+      setTimeout(() => result.refresh?.(), 4000);
+    } catch (e) { setRunMsg(`Could not start the run: ${e instanceof Error ? e.message : String(e)}`); setPending(null); }
+    finally { setRunBusy(false); }
+  };
   const toggle = (id: string) => { const next = new Set(st!.expanded); if (next.has(id)) next.delete(id); else next.add(id); setExpanded(next); };
   const header = (key: ColumnKey) => { setSort((s) => (s?.key === key ? (s.dir === -1 ? { key, dir: 1 } : s.dir === 1 && key === 'name' ? null : { key, dir: -1 }) : { key, dir: COLUMNS.find((c) => c.key === key)!.numeric ? -1 : 1 })); };
   const exportCsv = async () => {
@@ -187,6 +219,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       <label className="f" title="Only agents that have at least one flag"><input type="checkbox" checked={filters.flagsOnly} onChange={(e) => setFilters({ ...filters, flagsOnly: e.target.checked })} />Anomalies only</label>
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
     </div></>}
+    {isBoard && data && <RunBar shown={runnableShown.length} pending={pending} busy={runBusy} msg={runMsg} onAsk={() => askRun(runnableShown)} onConfirm={confirmRun} onCancel={() => setPending(null)} onDismiss={() => setRunMsg(null)} />}
     {result.loading && !data && <p role="status">Loading agent ledger…</p>}
     {result.error && <div role="alert">Agent Ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
     {data && st && <>
@@ -198,9 +231,9 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
         <div><b>{Object.keys(data.nodes).length}</b><span>Live agents · {data.terminated.count} terminated</span></div>
         {delta !== null && <div><b>{delta >= 0 ? '+' : ''}{delta.toFixed(0)}%</b><span>Tokens vs prior period</span></div>}
       </div>}
-      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} /> : <div className="wrap"><table>
+      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} canRun={isBoard} onRun={(n) => askRun([n])} /> : <div className="wrap"><table>
         <thead><tr>{visibleCols.map((c) => <th key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`} tabIndex={0} title={COLUMN_TIP[c.key]} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
-          onClick={() => header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter') header(c.key); }}>{c.label}</th>)}</tr></thead>
+          onClick={() => c.key !== 'run' && header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter' && c.key !== 'run') header(c.key); }}>{c.label}</th>)}</tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={visibleCols.length} className="dim">{Object.keys(data.nodes).length === 0 ? 'No agents found for this company.' : 'No agents match the filters.'}</td></tr>}
           {rows.map((r, i) => {
@@ -212,7 +245,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
                 : c.key === 'output' ? fmtTokens(data.terminated.own.output) : c.key === 'runs' ? Math.round(data.terminated.own.runs).toLocaleString('en-US') : c.key === 'cost' ? fmtCost(data.terminated.own).text : null}</td>)}</tr>;
             const n = r.node;
             return <tr key={n.agentId} className={n.children.length && !flat ? 'm' : ''}>{visibleCols.map((c) => <td key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`}>
-              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} />
+              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} onRun={() => askRun([n])} />
               {c.key === 'name' && r.filteredManager && <span className="dim" style={{ marginLeft: 6, fontSize: 10 }}>(filtered: totals include the full subtree)</span>}</td>)}</tr>;
           })}
           {!isFilteringNow(filters) && <tr><td className="nc"><strong>Total</strong></td>{visibleCols.slice(1).map((c) => <td key={c.key} className={c.numeric ? 'n' : ''}>

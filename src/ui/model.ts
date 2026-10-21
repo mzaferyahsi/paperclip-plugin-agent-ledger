@@ -2,7 +2,7 @@
 import type { OrgNode, AgentLedgerData, Sums } from '../types.ts';
 
 export type Mode = 'own' | 'sub' | 'both';
-export type ColumnKey = 'name' | 'role' | 'activity' | 'status' | 'parent' | 'depth' | 'adapter' | 'model' | 'tier' | 'input' | 'cached' | 'output' | 'tokens' | 'cost' | 'runs' | 'flags';
+export type ColumnKey = 'name' | 'role' | 'activity' | 'status' | 'parent' | 'depth' | 'adapter' | 'model' | 'tier' | 'input' | 'cached' | 'output' | 'tokens' | 'cost' | 'runs' | 'flags' | 'run';
 export interface Filters { activity: string; adapter: string; model: string; tier: string; flagsOnly: boolean; q: string }
 export interface TableState { expanded: Set<string>; mode: Mode; sort: { key: ColumnKey; dir: 1 | -1 } | null; filters: Filters }
 export type Row =
@@ -34,6 +34,12 @@ export function activityOf(n: OrgNode): Activity {
   return n.own.runsTotal > 0 ? 'active' : 'quiet';
 }
 export const isDisabled = (n: OrgNode) => activityOf(n) === 'paused';
+/** Starting a run makes sense for an idle agent or one in error: not for one that is running or paused. */
+export const isRunnable = (n: OrgNode) => n.status !== 'running' && activityOf(n) !== 'paused';
+/** Cap on one batch; the worker enforces the same number. */
+export const MAX_RUN = 10;
+export const RUN_COL = { key: 'run' as ColumnKey, label: 'Run', numeric: false, defaultOn: true };
+export const INITIAL_FILTERS: Filters = { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
 export function fmtAgo(iso: string | null, now = Date.now()): string {
   if (!iso) return 'never';
   const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
@@ -58,6 +64,7 @@ export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLed
     case 'input': return s.input; case 'cached': return s.cached; case 'output': return s.output; case 'tokens': return s.tokens;
     case 'cost': return s.pricedTokens > 0 ? s.costMicro : -1; case 'runs': return s.runs;
     case 'flags': return n.flags.length;
+    case 'run': return 0;
   }
 }
 

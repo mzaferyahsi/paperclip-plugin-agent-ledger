@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.3.0
+
+- The page opens with the Running or active filter on, so idle agents with no runs in the range are hidden until you set Activity back to all.
+- Run button: board members get a Run column (and a Run button in the phone detail) to start one agent, and Run Agents Shown to start up to 10 of the idle agents in the table. A confirm step names them and says each run spends tokens. Agents that are running, paused, waiting for approval or terminated are skipped and listed. This adds the `agents.invoke` capability. A manual run has no assigned task, so the agent only checks its inbox.
+
 ## 0.2.5
 
 - Fix: older OpenAI usage records (before about 10 Oct 2026, from Codex and OpenCode) report input tokens without the cached part, newer ones with it. The plugin treated all as including it and subtracted the cached part, which zeroed the input of the older ones (about 2.8 million input tokens in October). An event whose cached tokens exceed its input is now kept as reported.

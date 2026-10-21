@@ -36,9 +36,10 @@ Uninstall with `paperclipai plugin uninstall mzaferyahsi.agent-ledger` (add `--f
 | `database.namespace.read` / `.write` / `.migrate` | Reads `agents`, `cost_events` and `heartbeat_runs`; stores prices and your rules in the plugin's own schema. |
 | `jobs.schedule` | The daily price refresh. |
 | `http.outbound` | The daily price refresh only. See [PRIVACY.md](PRIVACY.md). |
+| `agents.invoke` | Only for the Run button: a board member picks up to 10 agents and confirms, and each agent that is idle or in error gets a run started. Never used by a job or without a click. |
 | `ui.page.register`, `ui.sidebar.register`, `instance.settings.register` | The page, the sidebar link and the settings page. |
 
-The plugin never writes to Paperclip's tables, never wakes or assigns agents, and never posts comments.
+The plugin never writes to Paperclip's tables, never assigns agents, never pauses or resumes them, and never posts comments. It starts an agent only when a board member clicks Run and confirms.
 
 ## Prices
 

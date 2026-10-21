@@ -2,7 +2,8 @@ import { definePlugin, runWorker, type PluginContext } from '@paperclipai/plugin
 import { BadRequest, getAgentLedger, readConfig, requireCompany, type Config, type Env } from './assemble.ts';
 import { Cache } from './cache.ts';
 import { validateTimezone } from './time.ts';
-import { schemaProbeQueries } from './sql.ts';
+import { agentsQuery, schemaProbeQueries } from './sql.ts';
+import { RUN_PROMPT, RUN_REASON, parseRunIds, planRuns } from './run.ts';
 import { NS } from './namespace.ts';
 import { INSERT_RULE_SQL, foldRules, loadRuleRows, validateRule } from './rules.ts';
 import { refreshPrices } from './prices/refresh.ts';
@@ -14,8 +15,8 @@ import manifest from '../manifest.json' with { type: 'json' };
 interface Actor { type?: string; userId?: string | null; companyId?: string | null }
 export const isBoard = (a: Actor | null | undefined): a is Actor & { userId: string } => !!a && a.type === 'user' && typeof a.userId === 'string' && a.userId.length > 0;
 class Forbidden extends Error {}
-function requireBoard(a: Actor | null | undefined): string {
-  if (!isBoard(a)) throw new Forbidden('Only board members can change agent ledger settings');
+function requireBoard(a: Actor | null | undefined, what = 'change agent ledger settings'): string {
+  if (!isBoard(a)) throw new Forbidden(`Only board members can ${what}`);
   return a.userId;
 }
 
@@ -77,6 +78,24 @@ const plugin = definePlugin({
 
     // Writes: board members only. getData handlers carry no actor, so every write action checks the host-verified actor itself.
     ctx.actions.register('viewer', async (_p, a) => ({ isBoard: isBoard(a.actor) }));
+    // Manual run: starts a heartbeat run for up to ten agents. Board members only; paused, running, terminated and unknown agents are skipped and said so.
+    ctx.actions.register('agents.run', async (p, a) => {
+      const userId = requireBoard(a.actor, 'run agents');
+      const companyId = requireCompany(a.companyId ?? a.actor.companyId ?? p.companyId);
+      const ids = parseRunIds(p.agentIds);
+      const agents = await ctx.db.query<{ agent_id: string; name: string; status: string }>(agentsQuery(companyId).sql, agentsQuery(companyId).params);
+      const results: Array<{ id: string; name: string; started: boolean; reason: string | null; runId: string | null }> = [];
+      for (const plan of planRuns(ids, agents)) {
+        if (plan.action === 'skip') { results.push({ id: plan.id, name: plan.name, started: false, reason: plan.reason, runId: null }); continue; }
+        try {
+          const r = await ctx.agents.invoke(plan.id, companyId, { prompt: RUN_PROMPT, reason: RUN_REASON });
+          ctx.logger.info('agent run started from the ledger', { agentId: plan.id, userId, runId: r.runId });
+          results.push({ id: plan.id, name: plan.name, started: true, reason: null, runId: r.runId });
+        } catch (e) { results.push({ id: plan.id, name: plan.name, started: false, reason: e instanceof Error ? e.message.slice(0, 200) : 'Could not start', runId: null }); }
+      }
+      cache.clear();
+      return { results };
+    });
     ctx.actions.register('prices.refresh', async (_p, a) => { requireBoard(a.actor); return runRefresh('manual', a.companyId ?? a.actor.companyId ?? null); });
     ctx.actions.register('prices.decide', async (p, a) => {
       requireBoard(a.actor);

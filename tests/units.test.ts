@@ -186,3 +186,38 @@ test('activity states, filter and sort rank', async () => {
   assert.equal(matches(mk('paused', 2), f), false);
   assert.equal(fmtAgo(null), 'never');
 });
+
+test('the page opens on the Running or active filter, and only idle or errored agents can be run', async () => {
+  const { INITIAL_FILTERS, isRunnable, matches } = await import('../src/ui/model.ts');
+  assert.equal(INITIAL_FILTERS.activity, 'live', 'the running/active filter is on by default');
+  const mk = (status: string, runsTotal: number) => ({ status, own: { runsTotal } }) as never;
+  assert.equal(matches(mk('idle', 2), INITIAL_FILTERS), true);
+  assert.equal(matches(mk('idle', 0), INITIAL_FILTERS), false, 'agents with no runs are hidden until the filter is cleared');
+  assert.equal(isRunnable(mk('idle', 0)), true);
+  assert.equal(isRunnable(mk('error', 0)), true, 'an agent in error can be retried');
+  assert.equal(isRunnable(mk('running', 3)), false);
+  assert.equal(isRunnable(mk('paused', 3)), false);
+});
+
+test('manual runs: ids are validated and capped, and only idle or errored agents of the company are started', async () => {
+  const { parseRunIds, planRuns, MAX_RUN, RUN_PROMPT } = await import('../src/run.ts');
+  const { MAX_RUN: UI_MAX } = await import('../src/ui/model.ts');
+  const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  assert.equal(UI_MAX, MAX_RUN, 'the page and the worker agree on the cap');
+  assert.deepEqual(parseRunIds([id(1), id(1), id(2).toUpperCase()]), [id(1), id(2)], 'duplicates collapse, case is ignored');
+  for (const bad of [undefined, [], 'x', [1], ['not-a-uuid'], Array.from({ length: MAX_RUN + 1 }, (_, i) => id(i + 1))]) assert.throws(() => parseRunIds(bad), /agent|Choose|at most/i);
+  const agents = [{ agent_id: id(1), name: 'Idle', status: 'idle' }, { agent_id: id(2), name: 'Busy', status: 'running' }, { agent_id: id(3), name: 'Off', status: 'paused' }, { agent_id: id(4), name: 'Hold', status: 'pending_approval' }, { agent_id: id(5), name: 'Broken', status: 'error' }, { agent_id: id(6), name: 'Gone', status: 'terminated' }];
+  const plan = planRuns([id(1), id(2), id(3), id(4), id(5), id(6), id(7)], agents);
+  assert.deepEqual(plan.map((p) => [p.name === p.id ? 'unknown' : p.name, p.action, p.reason]), [['Idle', 'run', null], ['Busy', 'skip', 'Already running'], ['Off', 'skip', 'Paused'], ['Hold', 'skip', 'Waiting for approval'], ['Broken', 'run', null], ['Gone', 'skip', 'Terminated'], ['unknown', 'skip', 'Agent not found']]);
+  assert.match(RUN_PROMPT, /inbox/);
+});
+
+test('capabilities: the only agent capability is invoke, used only by the board-only run action', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../manifest.json', import.meta.url), 'utf8')) as { capabilities: string[] };
+  assert.deepEqual(manifest.capabilities.filter((c) => c.startsWith('agents.')), ['agents.invoke']);
+  const worker = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf8');
+  assert.equal([...worker.matchAll(/ctx\.agents\./g)].length, 1, 'one use of the agents API');
+  assert.doesNotMatch(worker, /ctx\.agents\.(pause|resume|list|get)/);
+  const i = worker.indexOf("actions.register('agents.run'");
+  assert.match(worker.slice(i, i + 400), /requireBoard\(a\.actor, 'run agents'\)/, 'the run action checks the board first');
+});
