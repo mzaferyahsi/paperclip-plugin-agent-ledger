@@ -34,6 +34,9 @@ export const detailCss = `
 .ad-chart{width:100%;height:auto;display:block;overflow:visible}
 .ad-chart text{fill:var(--muted-foreground);font-size:10px}
 .ad-chart .hit{fill:transparent}.ad-chart .bar:hover .hit{fill:var(--accent);opacity:.5}
+.ad-chartbox{position:relative}
+.ad-tip{position:absolute;top:0;z-index:5;pointer-events:none;width:max-content;min-width:200px;max-width:340px;white-space:nowrap;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--popover,var(--background));color:var(--foreground);box-shadow:0 6px 24px rgba(0,0,0,.3);font-size:12px;display:grid;gap:3px}
+.ad-tip b{font-weight:600}.ad-tip .r{display:flex;justify-content:space-between;gap:14px;font-family:${mono};font-variant-numeric:tabular-nums}.ad-tip .r span:first-child{font-family:inherit;display:inline-flex;align-items:center;gap:6px;min-width:0;}.ad-tip .r i{width:9px;height:9px;border-radius:2px;flex:none}.ad-tip .sep{border-top:1px solid var(--border);margin:2px 0}
 .ad-legend{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;margin-top:6px}
 .ad-legend span{display:inline-flex;align-items:center;gap:6px}.ad-legend i{width:10px;height:10px;border-radius:2px;display:inline-block}
 .ad-table{width:100%;border-collapse:collapse}.ad-table th,.ad-table td{padding:5px 8px;border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}
@@ -69,20 +72,34 @@ function Chart({ d, metric, color, label }: { d: AgentDetailData; metric: 'token
   const fmtV = (v: number) => (metric === 'tokens' ? fmtTokens(v) : fmtUsd(v));
   const every = Math.ceil(d.buckets.length / 8);
   const y = (v: number) => T + (H - T - B) * (1 - v / max);
-  return <svg className="ad-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+  const [hover, setHover] = useState<number | null>(null);
+  const hb = hover !== null ? d.buckets[hover] : undefined;
+  const hx = hover !== null ? L + hover * step + step / 2 : 0;
+  return <div className="ad-chartbox" onMouseLeave={() => setHover(null)}><svg className="ad-chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
     {[0, 0.5, 1].map((f) => <g key={f}><line x1={L} x2={W - R} y1={y(max * f)} y2={y(max * f)} stroke="var(--border)" strokeWidth="1" /><text x={L - 6} y={y(max * f) + 3} textAnchor="end">{fmtV(max * f)}</text></g>)}
     {d.buckets.map((b, i) => {
       const x = L + i * step + (step - bw) / 2;
       let acc = 0;
       const parts = Object.entries(b.byModel).sort((p, q) => val(q[1]) - val(p[1]));
-      const tip = [`${b.label}: ${fmtV(bt(b))}`, ...parts.map(([k, m]) => `  ${k.split('|')[1]}: ${fmtV(val(m))}`)].join('\n');
-      return <g key={b.key} className="bar"><title>{tip}</title>
+      return <g key={b.key} className="bar" onMouseEnter={() => setHover(i)} onMouseMove={() => hover !== i && setHover(i)}>
         <rect className="hit" x={L + i * step} y={T} width={step} height={H - T - B} />
         {parts.map(([k, m]) => { const h = (val(m) / max) * (H - T - B); const yy = y(0) - acc - h; acc += h; return h > 0 ? <rect key={k} x={x} y={yy} width={bw} height={h} fill={color(k)} /> : null; })}
         {i % every === 0 && <text x={x + bw / 2} y={H - 5} textAnchor="middle">{d.granularity === 'day' ? b.label.slice(5) : b.label}</text>}
       </g>;
     })}
-  </svg>;
+  </svg>
+    {hb && <div className="ad-tip" role="status" style={{ left: `${(hx / W) * 100}%`, transform: hx / W > 0.6 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)' }}>
+      <b>{hb.label}</b>
+      <div className="r"><span>Tokens</span><span>{hb.tokens.toLocaleString('en-US')}</span></div>
+      <div className="r"><span>Input</span><span>{hb.input.toLocaleString('en-US')}</span></div>
+      <div className="r"><span>Cached input</span><span>{hb.cached.toLocaleString('en-US')}</span></div>
+      <div className="r"><span>Output</span><span>{hb.output.toLocaleString('en-US')}</span></div>
+      <div className="r"><span>Cost</span><span>{hb.costMicro > 0 ? fmtUsd(hb.costMicro) : '—'}</span></div>
+      <div className="r"><span>Runs</span><span>{Math.round(hb.runs)}</span></div>
+      {Object.keys(hb.byModel).length > 0 && <div className="sep" />}
+      {Object.entries(hb.byModel).sort((p, q) => q[1].tokens - p[1].tokens).map(([k, m]) => <div key={k} className="r"><span><i style={{ background: color(k) }} />{k.split('|')[1]}</span><span>{fmtTokens(m.tokens)}{m.costMicro > 0 ? ` · ${fmtUsd(m.costMicro)}` : ''}</span></div>)}
+    </div>}
+  </div>;
 }
 
 export function AgentDetailDialog({ node, data, companyId, page, canChange, onChange, onClose }: { node: OrgNode; data: AgentLedgerData; companyId: string; page: unknown; canChange: boolean; onChange: () => void; onClose: () => void }) {
