@@ -19,5 +19,13 @@
     "test": "node --test --test-concurrency=1 tests/*.test.ts"
   },
   "dependencies": { "@paperclipai/plugin-sdk": "2026.1012.0", "react": "19.2.0" },
-  "devDependencies": { "@paperclipai/shared": "2026.1005.0", "@types/node": "24.10.0", "@types/react": "19.2.18", "esbuild": "0.25.11", "typescript": "5.9.3" }
+  "devDependencies": { "@paperclipai/shared": "2026.1005.0", "@types/node": "24.10.0", "@types/react": "19.2.18", "esbuild": "0.25.11", "typescript": "5.9.3" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mzaferyahsi/paperclip-plugin-agent-ledger.git"
+  },
+  "homepage": "https://github.com/mzaferyahsi/paperclip-plugin-agent-ledger#readme",
+  "bugs": {
+    "url": "https://github.com/mzaferyahsi/paperclip-plugin-agent-ledger/issues"
+  }
 }

@@ -104,3 +104,7 @@ The tests run the real SQL against a throwaway Postgres and pass every statement
 ## License
 
 MIT. See [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md).
+
+## Maintainer scripts
+
+The `qa/` directory contains maintainer-only scripts with local paths. Review and adapt these paths before running the scripts on your machine.
