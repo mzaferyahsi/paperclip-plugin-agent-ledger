@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.6.2
+
+- The page opens on the Active agents filter again. It now means every agent that is not paused (running, ran in the range, or idle with no runs), so the list no longer shrinks on days with fewer runs and agents without data stay visible. "Active in range" and "No runs in range" are still there for the old meanings. This replaces the 0.6.0 change that started on All.
+
 ## 0.6.1
 
 - Detail dialog: hovering a bar in the charts shows a tooltip at once with the exact numbers of that day or hour: tokens, input, cached input, output, cost, runs, and tokens and cost for each model.

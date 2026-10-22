@@ -189,18 +189,19 @@ test('activity states, filter and sort rank', async () => {
   assert.equal(isDisabled(mk('idle', 0)), false);
   const f = { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
   assert.equal(matches(mk('idle', 2), f), true);
-  assert.equal(matches(mk('idle', 0), f), false);
+  assert.equal(matches(mk('idle', 0), f), true, 'an enabled agent with no runs stays in the list, so the count does not depend on the day');
   assert.equal(matches(mk('paused', 2), f), false);
   assert.equal(fmtAgo(null), 'never');
 });
 
-test('the page opens on the Running or active filter, and only idle or errored agents can be run', async () => {
+test('the page opens on the Active agents filter, and only idle or errored agents can be run', async () => {
   const { INITIAL_FILTERS, isRunnable, matches } = await import('../src/ui/model.ts');
-  assert.equal(INITIAL_FILTERS.activity, '', 'every agent is listed by default, including agents with no runs');
+  assert.equal(INITIAL_FILTERS.activity, 'live', 'the Active agents filter is on by default');
   const mk = (status: string, runsTotal: number) => ({ status, own: { runsTotal } }) as never;
   assert.equal(matches(mk('idle', 2), INITIAL_FILTERS), true);
   assert.equal(matches(mk('idle', 0), INITIAL_FILTERS), true, 'agents with no runs are listed');
-  assert.equal(matches(mk('idle', 0), { ...INITIAL_FILTERS, activity: 'live' }), false, 'the running or active filter still hides them');
+  assert.equal(matches(mk('paused', 0), INITIAL_FILTERS), false, 'paused agents are hidden until the filter is cleared');
+  assert.equal(matches(mk('idle', 0), { ...INITIAL_FILTERS, activity: 'active' }), false, 'Active in range still means ran in the range');
   assert.equal(isRunnable(mk('idle', 0)), true);
   assert.equal(isRunnable(mk('error', 0)), true, 'an agent in error can be retried');
   assert.equal(isRunnable(mk('running', 3)), false);

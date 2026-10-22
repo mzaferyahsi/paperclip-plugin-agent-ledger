@@ -24,7 +24,7 @@ export const COLUMNS: Array<{ key: ColumnKey; label: string; numeric: boolean; d
 export type Activity = 'running' | 'active' | 'quiet' | 'paused' | 'error';
 export const ACTIVITY_LABEL: Record<Activity, string> = { running: 'Running now', active: 'Active', quiet: 'No runs', paused: 'Paused', error: 'Error' };
 export const ACTIVITY_FILTERS: Array<{ value: string; label: string }> = [
-  { value: 'live', label: 'Running or active' }, { value: 'running', label: 'Running now' }, { value: 'active', label: 'Active in range' },
+  { value: 'live', label: 'Active agents (not paused)' }, { value: 'running', label: 'Running now' }, { value: 'active', label: 'Active in range' },
   { value: 'quiet', label: 'No runs in range' }, { value: 'paused', label: 'Paused (disabled)' }, { value: 'error', label: 'Error' }];
 const ACTIVITY_RANK: Record<Activity, number> = { running: 0, active: 1, quiet: 2, paused: 3, error: 4 };
 export function activityOf(n: OrgNode): Activity {
@@ -40,7 +40,7 @@ export const isRunnable = (n: OrgNode) => n.status !== 'running' && activityOf(n
 export const MAX_RUN = 10;
 export const CHANGE_COL = { key: 'change' as ColumnKey, label: 'Change model', numeric: false, defaultOn: true };
 export const RUN_COL = { key: 'run' as ColumnKey, label: 'Run', numeric: false, defaultOn: true };
-export const INITIAL_FILTERS: Filters = { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
+export const INITIAL_FILTERS: Filters = { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
 export function fmtAgo(iso: string | null, now = Date.now()): string {
   if (!iso) return 'never';
   const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
@@ -70,7 +70,7 @@ export function sortValue(n: OrgNode, key: ColumnKey, mode: Mode, data: AgentLed
 }
 
 export function matches(n: OrgNode, f: Filters): boolean {
-  if (f.activity) { const a = activityOf(n); if (f.activity === 'live' ? a !== 'running' && a !== 'active' : a !== f.activity) return false; }
+  if (f.activity) { const a = activityOf(n); if (f.activity === 'live' ? a === 'paused' : a !== f.activity) return false; }
   if (f.adapter && n.adapterType !== f.adapter) return false;
   if (f.model && n.configuredModel !== f.model && !n.actualModels.some((m) => m.model === f.model)) return false;
   if (f.tier && n.tier?.configured !== f.tier) return false;
