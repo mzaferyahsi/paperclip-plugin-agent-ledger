@@ -108,3 +108,9 @@ MIT. See [LICENSE](LICENSE) and [THIRD_PARTY.md](THIRD_PARTY.md).
 ## Maintainer scripts
 
 The `qa/` directory contains maintainer-only scripts with local paths. Review and adapt these paths before running the scripts on your machine.
+
+### Package releases
+
+Publish a GitHub Release for a `v<package.json version>` tag to publish the tagged source to npm and GitHub Packages. Tag pushes also trigger publication. Each run installs dependencies, builds, tests and checks the package before upload. Existing versions are skipped, so publishing a Release after pushing its tag is safe. Maintainers can retry the workflow with `release_tag`.
+
+The npm name remains `paperclip-plugin-agent-ledger`. The GitHub Packages name is `@mzaferyahsi/paperclip-plugin-agent-ledger` on `https://npm.pkg.github.com`. GitHub Packages downloads require GitHub authentication. Repository `NPM_TOKEN` is used only for npm publication; GitHub Packages uses the workflow's temporary `GITHUB_TOKEN`.

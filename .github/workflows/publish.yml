@@ -1,8 +1,10 @@
-name: Publish to npm
+name: Publish packages
 
 on:
   push:
     tags: ['v*']
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
@@ -12,30 +14,82 @@ on:
 
 permissions:
   contents: read
-  id-token: write
+
+concurrency:
+  group: publish-${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag || github.ref_name }}
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ env.RELEASE_TAG }}
           fetch-depth: 0
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
           registry-url: https://registry.npmjs.org
           cache: npm
       - name: Check release version
-        env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
           node --input-type=module -e 'import fs from "node:fs"; const p = JSON.parse(fs.readFileSync("package.json", "utf8")); if (process.env.RELEASE_TAG !== `v${p.version}`) throw new Error("Release tag does not match package.json version");'
-          git rev-parse --verify "refs/tags/${RELEASE_TAG}"
       - run: npm ci
       - run: npm run build
       - run: npm test
       - run: npm run pack:check
-      - run: npm publish --provenance --access public
+      - name: Check npm version
+        id: npm-version
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const r = await fetch(`https://registry.npmjs.org/${encodeURIComponent(p.name)}/${encodeURIComponent(p.version)}`);
+          if (!r.ok && r.status !== 404) throw new Error(`npm registry returned ${r.status}`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `exists=${r.ok}\n`);
+          JS
+      - name: Publish to npm
+        if: steps.npm-version.outputs.exists != 'true'
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: https://npm.pkg.github.com
+          scope: '@mzaferyahsi'
+      - name: Prepare GitHub Packages name
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          p.name = `@mzaferyahsi/${p.name.replace(/^@[^/]+\//, '')}`;
+          p.repository = {type: 'git', url: `git+https://github.com/${process.env.GITHUB_REPOSITORY}.git`};
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          JS
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node --input-type=module <<'JS'
+          import fs from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const r = await fetch(`https://npm.pkg.github.com/${encodeURIComponent(p.name)}`, {headers: {Authorization: `Bearer ${process.env.NODE_AUTH_TOKEN}`}});
+          if (r.ok) {
+            const metadata = await r.json();
+            if (metadata.versions?.[p.version]) { console.log('GitHub package version already exists'); process.exit(0); }
+          } else if (r.status !== 404) {
+            throw new Error(`GitHub Packages returned ${r.status}`);
+          }
+          execFileSync('npm', ['publish', '--registry=https://npm.pkg.github.com', '--access=public'], {stdio: 'inherit'});
+          JS
