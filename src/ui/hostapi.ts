@@ -2,7 +2,7 @@
 // change an agent; the plugin worker never gets write access to agents.
 import type { AdapterConfig } from '../provider.ts';
 
-export interface HostAgent { id: string; name: string; status: string; adapterType: string; adapterConfig: AdapterConfig }
+export interface HostAgent { id: string; name: string; status: string; adapterType: string; adapterConfig: AdapterConfig; runtimeConfig?: Record<string, unknown> }
 export interface HostAdapter { type: string; disabled?: boolean }
 export interface HostModel { id: string; label?: string }
 
@@ -30,6 +30,6 @@ export async function listModels(companyId: string, adapter: string): Promise<Ho
   return Array.isArray(r) ? r : r.models ?? [];
 }
 export const getAgent = (id: string) => call<HostAgent>(`/api/agents/${encodeURIComponent(id)}`);
-export const patchAgent = (id: string, body: { adapterType: string; adapterConfig: AdapterConfig }) =>
+export const patchAgent = (id: string, body: { adapterType: string; adapterConfig: AdapterConfig; runtimeConfig?: Record<string, unknown> }) =>
   call<HostAgent>(`/api/agents/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
 export const resetSession = (id: string) => call<unknown>(`/api/agents/${encodeURIComponent(id)}/runtime-state/reset-session`, { method: 'POST', body: '{}' });

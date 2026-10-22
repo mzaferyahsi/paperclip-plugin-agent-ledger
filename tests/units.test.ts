@@ -269,3 +269,19 @@ test('saved profiles overlay the standard ones and bad rows are ignored', () => 
   assert.equal(m.claude_local!.label, 'Claude custom'); assert.equal(m.codex_local!.label, DEFAULT_PROFILES.codex_local!.label);
   assert.ok(m.x_local); assert.equal(m.broken, undefined);
 });
+
+import { planAiBinding } from '../src/provider.ts';
+test('the AI connection binding moves with the provider', () => {
+  const openai = { mode: 'responsible_user', provider: 'openai', method: 'subscription' };
+  assert.deepEqual(planAiBinding(openai, 'codex_local', 'gpt-6-luna'), { action: 'keep' });
+  assert.deepEqual(planAiBinding(undefined, 'claude_local', 'x'), { action: 'keep' });
+  const p = planAiBinding(openai, 'claude_local', 'claude-sonnet-5-5');
+  assert.equal(p.action, 'set'); if (p.action === 'set') assert.deepEqual(p.binding, { mode: 'responsible_user', provider: 'anthropic', method: 'subscription' });
+  const api = planAiBinding({ mode: 'responsible_user', provider: 'anthropic', method: 'api_key' }, 'codex_local', 'gpt-6-luna');
+  if (api.action === 'set') assert.deepEqual(api.binding, { mode: 'responsible_user', provider: 'openai', method: 'api_key' }); else assert.fail('expected set');
+  assert.equal(planAiBinding(openai, 'opencode_local', 'omniroute/at-developer').action, 'blocked');
+  assert.equal(planAiBinding(openai, 'opencode_local', 'openrouter/x').action, 'set');
+  // a shared connection is replaced by the user's own sign-in, and the preview says so
+  const sh = planAiBinding({ mode: 'shared', provider: 'openai', method: 'api_key', connectionId: 'c', grantId: 'g' }, 'claude_local', 'm');
+  assert.equal(sh.action, 'set'); if (sh.action === 'set') assert.match(sh.from, /shared/);
+});

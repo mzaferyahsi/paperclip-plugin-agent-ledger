@@ -97,3 +97,35 @@ export function diffConfig(cur: AdapterConfig, next: AdapterConfig, curAdapter: 
 }
 /** A saved session belongs to the old provider and model, so it is reset when either changes. */
 export const needsSessionReset = (cur: AdapterConfig, curAdapter: string, adapter: string, model: string) => curAdapter !== adapter || cur.model !== model;
+
+// --- AI connection binding -------------------------------------------------------------------------------
+// Some agents carry runtimeConfig.aiConnection (which provider account they sign in with). The host refuses an adapter or
+// model change when the binding no longer fits ("Select an AI connection compatible with the new harness and model"), so the
+// binding moves with the provider. This table mirrors the host's AI_CONNECTION_CAPABILITIES (compatibility only).
+export interface AiBinding { mode: string; provider: string; method: string; connectionId?: string; grantId?: string }
+const AI_ADAPTERS: Record<string, Record<string, string[]>> = {
+  anthropic: { subscription: ['claude_local'], api_key: ['claude_local'] },
+  openai: { subscription: ['codex_local'], api_key: ['codex_local'] },
+  xai: { subscription: ['grok_local'], api_key: ['grok_local'] },
+  openrouter: { api_key: ['opencode_local'] },
+};
+const AI_ORDER = ['anthropic', 'openai', 'xai', 'openrouter'];
+const fits = (provider: string, method: string, adapter: string, model: string) =>
+  !!AI_ADAPTERS[provider]?.[method]?.includes(adapter) && (provider !== 'openrouter' || model.startsWith('openrouter/'));
+export function aiCompatible(b: AiBinding, adapter: string, model: string): boolean {
+  const methods = Object.keys(AI_ADAPTERS[b.provider] ?? {});
+  return (b.mode === 'responsible_user' ? methods : methods.filter((m) => m === b.method)).some((m) => fits(b.provider, m, adapter, model));
+}
+export type AiPlan = { action: 'keep' } | { action: 'set'; binding: AiBinding; from: string; to: string } | { action: 'blocked'; from: string };
+const label = (b: AiBinding) => `${b.provider} ${b.method}${b.mode === 'responsible_user' ? '' : ` (${b.mode})`}`;
+/** What to do with the agent's AI connection binding when it moves to adapter/model. */
+export function planAiBinding(cur: AiBinding | undefined | null, adapter: string, model: string): AiPlan {
+  if (!cur || typeof cur.provider !== 'string') return { action: 'keep' };
+  if (aiCompatible(cur, adapter, model)) return { action: 'keep' };
+  for (const provider of AI_ORDER) {
+    const methods = Object.keys(AI_ADAPTERS[provider]!);
+    const method = [cur.method, 'subscription', 'api_key'].find((m) => m && methods.includes(m) && fits(provider, m, adapter, model));
+    if (method) { const binding: AiBinding = { mode: 'responsible_user', provider, method }; return { action: 'set', binding, from: label(cur), to: label(binding) }; }
+  }
+  return { action: 'blocked', from: label(cur) };
+}

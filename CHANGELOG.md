@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.4.1
+
+- Fix: changing an agent between providers failed with "Select an AI connection compatible with the new harness and model" when the agent signs in through an AI connection (for example Rushu or Kiin on Codex moving to Claude). The connection binding now moves with the provider (your own sign-in for the new provider, shown in What changes). If no connection fits the new provider and model, the dialog says so and does not write anything.
+- Change model is now a real modal: dimmed backdrop, centred panel, Escape or a click outside closes it, Tab stays inside, the page behind does not scroll, and focus returns to the Change button.
+
 ## 0.4.0
 
 - Change model: board members get a Model column with a Change button (and Change model in the phone detail). Pick the provider and the model (the host lists the models of each provider, or type one), see exactly which keys change, then Apply. The agent keeps its instructions, skills, working directory, secrets and heartbeat settings; its saved session is reset when the provider or model changes; an agent that is running is refused. The change is made through the Paperclip API as the signed-in board member, so the host decides who may do it. No new capability.
