@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { startPg, type TestPg } from './pg-helper.ts';
 import { NS } from '../src/namespace.ts';
 import { Cache } from '../src/cache.ts';
-import { DEFAULT_CONFIG, getAgentLedger } from '../src/assemble.ts';
+import { DEFAULT_CONFIG, getAgentDetail, getAgentLedger } from '../src/assemble.ts';
 import { refreshPrices } from '../src/prices/refresh.ts';
 import { ensureSnapshot, loadVersions, HELD_SQL, DECIDE_HELD_SQL } from '../src/prices/store.ts';
 import { INSERT_RULE_SQL, RULES_SQL } from '../src/rules.ts';
@@ -153,3 +153,19 @@ test('refresh: concurrent runs are blocked by the lease', async (t) => {
 });
 
 
+
+test('agent detail: per-day model split reconciles with the org view and rejects bad ids', { skip: process.env.SKIP_PG === '1' }, async (t) => {
+  if (!pg) return t.skip('embedded postgres not available');
+  const range = { from: '2026-10-14', to: '2026-10-16' };
+  const org = await getAgentLedger(env(), C, range);
+  const d = await getAgentDetail(env(), C, id(3), range);
+  assert.equal(d.sums.tokens, org.nodes[id(3)]!.own.tokens);
+  assert.equal(d.buckets.reduce((a, b) => a + b.tokens, 0), d.sums.tokens);
+  assert.equal(d.buckets.reduce((a, b) => a + b.costMicro, 0), d.sums.costMicro);
+  const day = d.buckets.find((b) => b.key === '2026-10-15')!;
+  assert.deepEqual(Object.keys(day.byModel), ['openai|gpt-6-luna']);
+  assert.equal(d.models.length, 1);
+  assert.ok(d.models[0]!.firstAt <= d.models[0]!.lastAt);
+  assert.equal((await getAgentDetail(env(), C, id(2), range)).sums.tokens, org.nodes[id(2)]!.own.tokens); // another agent's rows never leak in
+  await assert.rejects(() => getAgentDetail(env(), C, 'not-a-uuid', range));
+});

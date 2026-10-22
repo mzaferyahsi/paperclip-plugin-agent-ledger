@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
 import { INITIAL_FILTERS, MAX_RUN, RUN_COL, CHANGE_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, modelBreakdownTip, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
+import { AgentDetailDialog, detailCss } from './agentdetail.tsx';
 import { ModelChangeDialog } from './modelchange.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
 import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
@@ -18,7 +19,7 @@ const COLUMN_TIP: Record<string, string> = { name: 'Click to sort by name', role
 const MODE_TIP: Record<Mode, string> = { own: 'Each row shows only what that agent used itself', sub: 'Manager rows show their own usage plus everyone who reports to them', both: 'Manager rows show the subtree total, with their own usage underneath' };
 const mono = 'ui-monospace, SFMono-Regular, Menlo, monospace';
 
-const css = mobileCss + `
+const css = mobileCss + detailCss + `
 .ou{display:grid;gap:12px;min-width:0;font-size:13px}
 .ou *{box-sizing:border-box}
 .ou button,.ou select,.ou input{font:inherit}
@@ -53,7 +54,7 @@ const css = mobileCss + `
 .ou .own{display:block;color:var(--muted-foreground);font-size:10.5px}
 .ou .dim{color:var(--muted-foreground)}
 .ou .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;background:var(--muted-foreground)}
-.ou a.nlink{color:inherit;text-decoration:none}.ou a.nlink:hover strong,.ou a.nlink:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
+.ou .nlink{color:inherit;text-decoration:none;background:none;border:0;padding:0;cursor:pointer;text-align:left}.ou .nlink:hover strong,.ou .nlink:focus-visible strong{text-decoration:underline;text-underline-offset:3px}
 .ou strong.off,.ou .mname.off{color:var(--muted-foreground);font-weight:500}.ou .dot.quiet,.ou .dot.active{background:#2563eb}.ou .dot.running{background:#16a34a}.ou .dot.paused{background:#d97706}.ou .dot.error{background:var(--destructive)}
 .ou .mo{font-family:${mono};font-size:12px}
 .ou .rc{display:inline-block;max-width:170px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;white-space:nowrap}
@@ -77,7 +78,7 @@ function loadCols(): Set<ColumnKey> {
 }
 function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v3', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
-function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun, onChange }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void; onRun: () => void; onChange: () => void }) {
+function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun, onChange, onDetails }: { onDetails: () => void; n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void; onRun: () => void; onChange: () => void }) {
   const nav = useHostNavigation();
   const mgr = n.children.length > 0;
   const num = (get: (s: typeof n.own) => number, fmt: (v: number) => string) => {
@@ -87,7 +88,7 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun,
   switch (col) {
     case 'name': return <span style={{ paddingLeft: flat ? 0 : depth * 18 }}>
       {!flat && mgr ? <button type="button" className="chev" aria-expanded={open} aria-label={`${open ? 'Collapse' : 'Expand'} ${n.name}`} onClick={toggle}>{open ? '▼' : '▶'}</button> : <span className="chev e">▶</span>}
-      <a className="nlink" {...nav.linkProps(`/agents/${n.agentId}/configuration`)} title={isDisabled(n) ? 'Paused (disabled). Open agent settings' : 'Open agent settings'}><strong className={isDisabled(n) ? 'off' : undefined}>{n.name}</strong></a></span>;
+      <button type="button" className="nlink" onClick={onDetails} title={`${isDisabled(n) ? 'Paused. ' : ''}Show details, graphs and usage of ${n.name}`}><strong className={isDisabled(n) ? 'off' : undefined}>{n.name}</strong></button></span>;
     case 'role': return <span className="dim rc" title={n.title ?? n.role}>{n.title ?? n.role}</span>;
     case 'activity': { const a = activityOf(n); return <><span className={`dot ${a}`} />{ACTIVITY_LABEL[a]} <span className="dim">· {fmtAgo(n.lastHeartbeatAt)}</span></>; }
     case 'status': return <><span className={`dot ${n.status}`} />{n.status}</>;
@@ -164,6 +165,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const nav = useHostNavigation();
   const clearCache = usePluginAction('cache.clear');
   const [changing, setChanging] = useState<OrgNode | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const run = usePluginAction('agents.run'), whoami = usePluginAction('viewer');
   const [isBoard, setIsBoard] = useState(false), [pending, setPending] = useState<OrgNode[] | null>(null), [runBusy, setRunBusy] = useState(false), [runMsg, setRunMsg] = useState<string | null>(null);
   useEffect(() => { whoami({}).then((r) => setIsBoard(!!(r as { isBoard?: boolean })?.isBoard)).catch(() => setIsBoard(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -227,6 +229,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
     </div></>}
     {isBoard && data && <RunBar shown={runnableShown.length} pending={pending} busy={runBusy} msg={runMsg} onAsk={() => askRun(runnableShown)} onConfirm={confirmRun} onCancel={() => setPending(null)} onDismiss={() => setRunMsg(null)} />}
+    {detail && data?.nodes[detail] && context.companyId && <AgentDetailDialog node={data.nodes[detail]!} data={data} companyId={context.companyId} page={range} canChange={isBoard && data.nodes[detail]!.status !== 'running'} onChange={() => { setChanging(data.nodes[detail]!); setDetail(null); }} onClose={() => setDetail(null)} />}
     {changing && context.companyId && <ModelChangeDialog agentId={changing.agentId} name={changing.name} companyId={context.companyId} onClose={() => setChanging(null)} onDone={async (m) => { setChanging(null); setRunMsg(m); try { await clearCache({}); } catch { /* the page refreshes anyway */ } result.refresh(); }} />}
     {result.loading && !data && <p role="status">Loading agent ledger…</p>}
     {result.error && <div role="alert">Agent Ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
@@ -239,7 +242,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
         <div><b>{Object.keys(data.nodes).length}</b><span>Live agents · {data.terminated.count} terminated</span></div>
         {delta !== null && <div><b>{delta >= 0 ? '+' : ''}{delta.toFixed(0)}%</b><span>Tokens vs prior period</span></div>}
       </div>}
-      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} canRun={isBoard} onRun={(n) => askRun([n])} onChange={(n) => setChanging(n)} /> : <div className="wrap"><table>
+      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} canRun={isBoard} onRun={(n) => askRun([n])} onChange={(n) => setChanging(n)} onDetails={(n) => setDetail(n.agentId)} /> : <div className="wrap"><table>
         <thead><tr>{visibleCols.map((c) => <th key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`} tabIndex={0} title={COLUMN_TIP[c.key]} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
           onClick={() => c.key !== 'run' && c.key !== 'change' && header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter' && c.key !== 'run' && c.key !== 'change') header(c.key); }}>{c.label}</th>)}</tr></thead>
         <tbody>
@@ -253,7 +256,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
                 : c.key === 'output' ? fmtTokens(data.terminated.own.output) : c.key === 'runs' ? Math.round(data.terminated.own.runs).toLocaleString('en-US') : c.key === 'cost' ? fmtCost(data.terminated.own).text : null}</td>)}</tr>;
             const n = r.node;
             return <tr key={n.agentId} className={n.children.length && !flat ? 'm' : ''}>{visibleCols.map((c) => <td key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`}>
-              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} onRun={() => askRun([n])} onChange={() => setChanging(n)} />
+              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} onRun={() => askRun([n])} onChange={() => setChanging(n)} onDetails={() => setDetail(n.agentId)} />
               {c.key === 'name' && r.filteredManager && <span className="dim" style={{ marginLeft: 6, fontSize: 10 }}>(filtered: totals include the full subtree)</span>}</td>)}</tr>;
           })}
           {!isFilteringNow(filters) && <tr><td className="nc"><strong>Total</strong></td>{visibleCols.slice(1).map((c) => <td key={c.key} className={c.numeric ? 'n' : ''}>

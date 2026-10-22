@@ -1,5 +1,5 @@
 import { definePlugin, runWorker, type PluginContext } from '@paperclipai/plugin-sdk';
-import { BadRequest, getAgentLedger, readConfig, requireCompany, type Config, type Env } from './assemble.ts';
+import { BadRequest, getAgentDetail, getAgentLedger, readConfig, requireCompany, type Config, type Env } from './assemble.ts';
 import { Cache } from './cache.ts';
 import { validateTimezone } from './time.ts';
 import { agentsQuery, schemaProbeQueries } from './sql.ts';
@@ -46,6 +46,8 @@ const plugin = definePlugin({
       ctx.db.execute(SEEN_UPSERT_SQL, [companyId]).catch(() => {});
       return getAgentLedger(await env(p), companyId, p.range);
     });
+
+    ctx.data.register('agent-detail', async (p) => getAgentDetail(await env(p), requireCompany(p.companyId), p.agentId, p.range));
 
     ctx.data.register('settings', async (p) => {
       const companyId = requireCompany(p.companyId);

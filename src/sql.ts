@@ -16,7 +16,7 @@ WHERE a.company_id = $1`,
 }
 
 /** Per agent, provider, model and UTC hour. Input is normalised to uncached input; $4 lists providers whose input includes cached tokens. */
-export function usageQuery(companyId: string, fromIso: string, toIso: string, inclusiveProviders: string[]): Query {
+export function usageQuery(companyId: string, fromIso: string, toIso: string, inclusiveProviders: string[], agentId?: string): Query {
   return {
     sql: `SELECT ce.agent_id::text AS agent_id, ce.provider, ce.model, ce.billing_type,
   floor(date_part('epoch', ce.occurred_at) / 3600)::bigint AS hour,
@@ -25,9 +25,9 @@ export function usageQuery(companyId: string, fromIso: string, toIso: string, in
   SUM(ce.output_tokens)::bigint AS output,
   COUNT(DISTINCT ce.heartbeat_run_id)::bigint AS runs
 FROM public.cost_events ce
-WHERE ce.company_id = $1 AND ce.occurred_at >= $2::timestamptz AND ce.occurred_at < $3::timestamptz
+WHERE ce.company_id = $1 AND ce.occurred_at >= $2::timestamptz AND ce.occurred_at < $3::timestamptz${agentId ? ' AND ce.agent_id = $5::uuid' : ''}
 GROUP BY ce.agent_id, ce.provider, ce.model, ce.billing_type, floor(date_part('epoch', ce.occurred_at) / 3600)`,
-    params: [companyId, fromIso, toIso, JSON.stringify(inclusiveProviders)],
+    params: agentId ? [companyId, fromIso, toIso, JSON.stringify(inclusiveProviders), agentId] : [companyId, fromIso, toIso, JSON.stringify(inclusiveProviders)],
   };
 }
 

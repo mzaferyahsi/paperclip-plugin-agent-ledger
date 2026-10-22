@@ -40,7 +40,7 @@ export const isRunnable = (n: OrgNode) => n.status !== 'running' && activityOf(n
 export const MAX_RUN = 10;
 export const CHANGE_COL = { key: 'change' as ColumnKey, label: 'Change model', numeric: false, defaultOn: true };
 export const RUN_COL = { key: 'run' as ColumnKey, label: 'Run', numeric: false, defaultOn: true };
-export const INITIAL_FILTERS: Filters = { activity: 'live', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
+export const INITIAL_FILTERS: Filters = { activity: '', adapter: '', model: '', tier: '', flagsOnly: false, q: '' };
 export function fmtAgo(iso: string | null, now = Date.now()): string {
   if (!iso) return 'never';
   const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);

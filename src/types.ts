@@ -21,6 +21,12 @@ export interface OrgNode {
   own: Sums; subtree: Sums; prior: { own: Sums; subtree: Sums } | null;
   flags: Flag[]; tier: { configured: string | null; expected: string | null } | null;
 }
+export interface DetailBucket { key: string; label: string; tokens: number; input: number; cached: number; output: number; costMicro: number; runs: number; byModel: Record<string, { tokens: number; costMicro: number }> }
+export interface DetailModel { provider: string; model: string; tokens: number; runs: number; share: number; costMicro: number; priced: boolean; free: boolean; firstAt: string; lastAt: string }
+export interface AgentDetailData {
+  agentId: string; range: RangeMeta; granularity: 'hour' | 'day'; timezone: string;
+  buckets: DetailBucket[]; models: DetailModel[]; sums: Sums; prior: Sums;
+}
 export interface PricingStatus {
   asOf: string | null; stale: boolean; snapshotOnly: boolean; snapshotDate: string; heldChanges: number; refreshing: boolean;
   sources: Array<{ key: string; label: string; status: string; at: string | null; detail: string | null }>;

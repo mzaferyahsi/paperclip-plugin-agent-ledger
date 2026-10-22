@@ -107,7 +107,7 @@ export function MobileSummary({ data, delta }: { data: AgentLedgerData; delta: n
   </div>;
 }
 
-function Detail({ n, data, onRun, onChange }: { n: OrgNode; data: AgentLedgerData; onRun: (() => void) | null; onChange: (() => void) | null }) {
+function Detail({ n, data, onRun, onChange, onDetails }: { onDetails: () => void; n: OrgNode; data: AgentLedgerData; onRun: (() => void) | null; onChange: (() => void) | null }) {
   const mgr = n.children.length > 0;
   const own = n.own, sub = n.subtree;
   const cost = (s: typeof own) => fmtCost(s).text;
@@ -121,7 +121,7 @@ function Detail({ n, data, onRun, onChange }: { n: OrgNode; data: AgentLedgerDat
       {mgr && <><dt>Cost est. (with reports)</dt><dd>{cost(sub)}</dd></>}
       <dt>Input / cached / output</dt><dd>{fmtTokens(own.input)} / {fmtTokens(own.cached)} / {fmtTokens(own.output)}</dd>
       <dt>Runs</dt><dd>{Math.round(own.runs).toLocaleString('en-US')}</dd></dl></div>
-    <div><h3>Agent</h3><p><a className="alink" {...nav.linkProps(`/agents/${n.agentId}/configuration`)}>Open agent settings ›</a></p><dl>
+    <div><h3>Agent</h3><p><button type="button" className="btn" onClick={onDetails}>Details and graphs ›</button> <a className="alink" {...nav.linkProps(`/agents/${n.agentId}/configuration`)}>Open agent settings ›</a></p><dl>
       <dt>Status</dt><dd>{n.status}</dd><dt>Activity</dt><dd>{ACTIVITY_LABEL[activityOf(n)]}, last heartbeat {fmtAgo(n.lastHeartbeatAt)}</dd><dt>Adapter</dt><dd>{n.adapterType}</dd>
       <dt>Reports to</dt><dd>{n.reportsTo ? data.nodes[n.reportsTo]?.name ?? 'terminated agent' : '—'}</dd>
       <dt>Configured model</dt><dd>{n.configuredModel ?? 'none'}</dd>
@@ -133,7 +133,7 @@ function Detail({ n, data, onRun, onChange }: { n: OrgNode; data: AgentLedgerDat
   </div>;
 }
 
-export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun, onChange }: { data: AgentLedgerData; rows: Row[]; st: TableState; flat: boolean; toggleTree: (id: string) => void; canRun: boolean; onRun: (n: OrgNode) => void; onChange: (n: OrgNode) => void }) {
+export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun, onChange, onDetails }: { onDetails: (n: OrgNode) => void; data: AgentLedgerData; rows: Row[]; st: TableState; flat: boolean; toggleTree: (id: string) => void; canRun: boolean; onRun: (n: OrgNode) => void; onChange: (n: OrgNode) => void }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const flip = (id: string) => setOpen((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
   if (rows.length === 0) return <p className="dim">{Object.keys(data.nodes).length === 0 ? 'No agents found for this company.' : 'No agents match the filters.'}</p>;
@@ -154,7 +154,7 @@ export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun, on
           </button>
           <span className="mnum"><b>{fmtTokens(s.tokens)}</b><span>{c.text}</span></span>
         </div>
-        {detailOpen && <Detail n={n} data={data} onRun={canRun && isRunnable(n) ? () => onRun(n) : null} onChange={canRun && n.status !== 'running' ? () => onChange(n) : null} />}
+        {detailOpen && <Detail n={n} data={data} onDetails={() => onDetails(n)} onRun={canRun && isRunnable(n) ? () => onRun(n) : null} onChange={canRun && n.status !== 'running' ? () => onChange(n) : null} />}
       </li>;
     })}
   </ul>;

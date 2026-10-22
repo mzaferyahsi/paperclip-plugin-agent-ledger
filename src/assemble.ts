@@ -10,7 +10,7 @@ import { foldRules, loadRuleRows, type Rules } from './rules.ts';
 import { agentsQuery, historyStartQuery, runsQuery, usageQuery } from './sql.ts';
 import { resolveRange, type RangeInput, type ResolvedRange } from './time.ts';
 import { buildTree, sumRoots } from './tree.ts';
-import { addSums, zeroSums, type ActualModel, type ModelTotal, type OrgNode, type AgentLedgerData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
+import { addSums, zeroSums, type ActualModel, type AgentDetailData, type DetailBucket, type ModelTotal, type OrgNode, type AgentLedgerData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
 
 export class BadRequest extends Error {}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -215,5 +215,49 @@ export async function getAgentLedger(env: Env, companyIdRaw: unknown, rangeRaw: 
     const { unmatched, ...rest } = built;
     const pricing = await guard('pricing', null, () => getPricingStatus(env.db, env.config, env.now(), unmatched));
     return { generatedAt: iso(env.now()), pluginVersion: env.pluginVersion, ...rest, pricing: pricing ?? { asOf: null, stale: true, snapshotOnly: true, snapshotDate: snapshotMeta.date, heldChanges: 0, refreshing: false, sources: [], unmatchedModels: unmatched, currency: 'USD' }, errors };
+  });
+}
+
+/** Daily (or hourly) usage of one agent, split by model, for the detail dialog. */
+export async function getAgentDetail(env: Env, companyIdRaw: unknown, agentIdRaw: unknown, rangeRaw: unknown): Promise<AgentDetailData> {
+  const companyId = requireCompany(companyIdRaw);
+  if (typeof agentIdRaw !== 'string' || !UUID.test(agentIdRaw)) throw new BadRequest('Unknown agent');
+  const agentId = agentIdRaw;
+  const input = parseRange(rangeRaw);
+  let range: ResolvedRange;
+  try { range = resolveRange(input, env.now(), env.config.timezone); } catch (e) { if (e instanceof RangeError) throw new BadRequest(e.message); throw e; }
+  const key = ['detail', agentId, companyId, range.kind, range.fromUtc, range.toUtc, env.config.timezone, env.config.inclusiveInputProviders.join(',')].join('|');
+  return env.cache.get(key, env.now(), async () => {
+    const q = (x: { sql: string; params: unknown[] }) => env.db.query<any>(x.sql, x.params);
+    const inc = env.config.inclusiveInputProviders;
+    const [usage, priorUsage, runs, versions, ruleRows] = await Promise.all([
+      q(usageQuery(companyId, iso(range.fromUtc), iso(range.toUtc), inc, agentId)) as Promise<UsageRow[]>,
+      q(usageQuery(companyId, iso(range.prior.fromUtc), iso(range.prior.toUtc), inc, agentId)) as Promise<UsageRow[]>,
+      q(runsQuery(companyId, iso(range.fromUtc), iso(range.toUtc))) as Promise<RunRow[]>,
+      loadVersions(env.db), loadRuleRows(env.db, companyId),
+    ]);
+    const rules = foldRules(ruleRows);
+    const book = new PriceBook({ versions, overrides: rules.overrides, modelAliases: rules.modelAliases, providerAliases: rules.providerAliases, freeProviders: rules.freeProviders });
+    const sink = new Map<string, { provider: string; model: string; tokens: number }>();
+    const whole = accumulate(usage, book, sink).get(agentId);
+    const priorSums = accumulate(priorUsage, book, new Map()).get(agentId)?.sums ?? zeroSums();
+    // Put each hourly row in its bucket (a day, or an hour for today and yesterday) and price it there.
+    const slot = (hourStart: number): number => { let lo = 0, hi = range.buckets.length - 1; while (lo <= hi) { const mid = (lo + hi) >> 1; const b = range.buckets[mid]!; if (hourStart < b.startUtc) hi = mid - 1; else if (hourStart >= b.endUtc) lo = mid + 1; else return mid; } return -1; };
+    const rowsBy: UsageRow[][] = range.buckets.map(() => []);
+    for (const r of usage) { const i = slot(n(r.hour) * HOUR); if (i >= 0) rowsBy[i]!.push(r); }
+    const buckets: DetailBucket[] = range.buckets.map((b, i) => {
+      const acc = accumulate(rowsBy[i]!, book, new Map()).get(agentId);
+      const byModel: DetailBucket['byModel'] = {};
+      if (acc) for (const [k, m] of acc.models) byModel[k] = { tokens: m.tokens, costMicro: m.cost };
+      const s = acc?.sums ?? zeroSums();
+      return { key: b.key, label: b.label, tokens: s.tokens, input: s.input, cached: s.cached, output: s.output, costMicro: s.costMicro, runs: s.runs, byModel };
+    });
+    const total = whole?.sums.tokens ?? 0;
+    const models = whole ? [...whole.models.values()].map((m) => ({ provider: m.provider, model: m.model, tokens: m.tokens, runs: m.runs, share: total ? m.tokens / total : 0, costMicro: m.cost, priced: m.priced, free: m.free, lastAt: iso(m.lastHour * HOUR),
+      firstAt: iso(Math.min(...usage.filter((r) => r.provider === m.provider && r.model === m.model).map((r) => n(r.hour))) * HOUR) })).sort((x, y) => y.tokens - x.tokens) : [];
+    const sums = { ...(whole?.sums ?? zeroSums()) };
+    const rr = runs.find((r) => r.agent_id === agentId);
+    if (rr) { sums.runsTotal = n(rr.runs_total); sums.runsFailed = n(rr.runs_failed); sums.runsWithUsage = n(rr.runs_with_usage); }
+    return { agentId, range: rangeMeta(range), granularity: range.granularity, timezone: range.timezone, buckets, models, sums, prior: priorSums };
   });
 }

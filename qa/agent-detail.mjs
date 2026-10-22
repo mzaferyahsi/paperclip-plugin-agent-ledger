@@ -1,0 +1,22 @@
+// Dev-only: name opens the detail modal with charts, insights, settings link; Escape closes; phone button.
+import { chromium } from '/usr/lib/node_modules/playwright/index.mjs';
+const out = new URL('./shots/', import.meta.url).pathname;
+const base = 'http://127.0.0.1:3101/QAT/agent-ledger';
+const b = await chromium.launch({ headless: true, executablePath: '/home/paperclip/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome' });
+const p = await b.newPage({ viewport: { width: 1300, height: 900 } }); const errors = []; p.on('pageerror', (e) => errors.push(String(e)));
+await p.goto(base); await p.waitForSelector('.ou table', { timeout: 20000 }); await p.getByRole('button', { name: '30 days' }).click(); await p.waitForTimeout(1500);
+await p.locator('button.nlink').first().click(); await p.waitForSelector('.ad-chart', { timeout: 15000 });
+console.log('insights:', await p.locator('.ad-ins li').allTextContents());
+console.log('kpis:', await p.locator('.ad-kpi').allTextContents());
+console.log('settings href:', await p.locator('.ad-foot a').getAttribute('href'));
+console.log('bars:', await p.locator('.ad-chart').first().locator('.bar').count(), '| tooltip:', (await p.locator('.ad-chart .bar title').nth(20).textContent()));
+await p.screenshot({ path: out + 'detail-top.png' });
+await p.locator('.ad-panel').evaluate((e) => { e.scrollTop = 600; }); await p.screenshot({ path: out + 'detail-mid.png' });
+await p.getByRole('button', { name: '90 days' }).click(); await p.waitForTimeout(1500); console.log('90d bars:', await p.locator('.ad-chart').first().locator('.bar').count());
+await p.keyboard.press('Escape'); await p.waitForTimeout(300); console.log('closed:', await p.locator('.ad-panel').count() === 0);
+const m = await b.newPage({ viewport: { width: 390, height: 844 } });
+await m.goto(base); await m.waitForSelector('.mlist', { timeout: 20000 }); await m.waitForTimeout(1500);
+await m.locator('.mmain').first().click(); await m.getByRole('button', { name: /Details and graphs/ }).click(); await m.waitForSelector('.ad-chart', { timeout: 15000 });
+console.log('phone scrollWidth<=width:', await m.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), await m.locator('.ad-panel').evaluate((e) => e.scrollWidth <= e.clientWidth));
+await m.screenshot({ path: out + 'detail-phone.png' });
+console.log('errors', errors); await b.close();

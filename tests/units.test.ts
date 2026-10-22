@@ -196,10 +196,11 @@ test('activity states, filter and sort rank', async () => {
 
 test('the page opens on the Running or active filter, and only idle or errored agents can be run', async () => {
   const { INITIAL_FILTERS, isRunnable, matches } = await import('../src/ui/model.ts');
-  assert.equal(INITIAL_FILTERS.activity, 'live', 'the running/active filter is on by default');
+  assert.equal(INITIAL_FILTERS.activity, '', 'every agent is listed by default, including agents with no runs');
   const mk = (status: string, runsTotal: number) => ({ status, own: { runsTotal } }) as never;
   assert.equal(matches(mk('idle', 2), INITIAL_FILTERS), true);
-  assert.equal(matches(mk('idle', 0), INITIAL_FILTERS), false, 'agents with no runs are hidden until the filter is cleared');
+  assert.equal(matches(mk('idle', 0), INITIAL_FILTERS), true, 'agents with no runs are listed');
+  assert.equal(matches(mk('idle', 0), { ...INITIAL_FILTERS, activity: 'live' }), false, 'the running or active filter still hides them');
   assert.equal(isRunnable(mk('idle', 0)), true);
   assert.equal(isRunnable(mk('error', 0)), true, 'an agent in error can be retried');
   assert.equal(isRunnable(mk('running', 3)), false);
@@ -284,4 +285,19 @@ test('the AI connection binding moves with the provider', () => {
   // a shared connection is replaced by the user's own sign-in, and the preview says so
   const sh = planAiBinding({ mode: 'shared', provider: 'openai', method: 'api_key', connectionId: 'c', grantId: 'g' }, 'claude_local', 'm');
   assert.equal(sh.action, 'set'); if (sh.action === 'set') assert.match(sh.from, /shared/);
+});
+
+import { agentInsights, modelSwitches } from '../src/ui/insights.ts';
+import { zeroSums, type AgentDetailData } from '../src/types.ts';
+test('model switches are found from the leading model per day', () => {
+  const b = (label: string, byModel: Record<string, number>): AgentDetailData['buckets'][number] => {
+    const tokens = Object.values(byModel).reduce((a, v) => a + v, 0);
+    return { key: label, label, tokens, input: tokens, cached: 0, output: 0, costMicro: tokens, runs: 1, byModel: Object.fromEntries(Object.entries(byModel).map(([k, v]) => [k, { tokens: v, costMicro: v }])) };
+  };
+  const d = { agentId: 'x', granularity: 'day', timezone: 'UTC', range: {} as never, models: [], sums: { ...zeroSums(), tokens: 600 }, prior: zeroSums(),
+    buckets: [b('2026-10-01', { 'a|m1': 100 }), b('2026-10-02', {}), b('2026-10-03', { 'a|m1': 100, 'a|m2': 300 }), b('2026-10-04', { 'a|m2': 100 })] } as AgentDetailData;
+  const sw = modelSwitches(d);
+  assert.equal(sw.length, 1);
+  assert.deepEqual([sw[0]!.from, sw[0]!.to, sw[0]!.at], ['m1', 'm2', '2026-10-03']);
+  assert.equal(agentInsights({} as never, { ...d, sums: zeroSums() }, {} as never, false)[0]!.text.includes('no recorded usage'), true);
 });

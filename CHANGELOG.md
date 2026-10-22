@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.6.0
+
+- Click an agent name to open a detail dialog: KPIs with change vs the period before, insights (model switches with the cost per 1M tokens before and after, share of company usage, caching, failures, peak day), tokens and cost per day by model as stacked charts, a models table with first and last use, the token mix, agent info and flags. Choose the page range, 30 days or 90 days. The dialog links to the agent settings (and to Change model for board members). On phones, open a row and tap Details and graphs. No new capability.
+- Agents with no runs or no usage are now listed by default (the Activity filter starts on All). Use Running or active to hide them.
+
 ## 0.5.0
 
 - Hover the Tokens or API-equivalent cost tile (or the phone summary) to see tokens, share, cost and agent count for each model used in the range, all agents together, so you can see what each model change contributed. No new capability.
