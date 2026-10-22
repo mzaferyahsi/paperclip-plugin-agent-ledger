@@ -152,3 +152,14 @@ export function toCsv(data: AgentLedgerData, rows: Row[], mode: Mode): string {
   }
   return lines.join('\n');
 }
+
+/** Tooltip text for the summary tiles: tokens and cost per model, all agents together. */
+export function modelBreakdownTip(data: AgentLedgerData, what: 'tokens' | 'cost'): string {
+  const list = data.modelTotals ?? [];
+  if (!list.length) return 'No usage in this range';
+  const line = (t: AgentLedgerData['modelTotals'][number]): string => {
+    const cost = t.priced ? fmtCost({ ...data.totals, costMicro: t.costMicro, pricedTokens: 1, unpricedTokens: 0 }).text : t.free ? 'free' : 'no price';
+    return what === 'tokens' ? `  ${t.model}: ${fmtTokens(t.tokens)} (${Math.round(t.share * 100)}%, ${t.agents} agent${t.agents === 1 ? '' : 's'})` : `  ${t.model}: ${cost} (${fmtTokens(t.tokens)} tokens)`;
+  };
+  return [what === 'tokens' ? 'Tokens by model, all agents in this range:' : 'API-equivalent cost by model, all agents in this range:', ...list.map(line)].join('\n');
+}

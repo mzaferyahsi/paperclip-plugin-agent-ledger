@@ -3,7 +3,7 @@ import { useHostNavigation } from '@paperclipai/plugin-sdk/ui';
 import { useEffect, useState } from 'react';
 import type { AgentLedgerData, OrgNode } from '../types.ts';
 import { FLAG_HELP } from './flaghelp.ts';
-import { ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, activityOf, fmtAgo, isDisabled, isRunnable, fmtCost, fmtTokens, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, activityOf, fmtAgo, isDisabled, isRunnable, fmtCost, fmtTokens, modelBreakdownTip, sumsFor, type Filters, type Mode, type Row, type TableState } from './model.ts';
 
 export function useNarrow(maxPx = 720): boolean {
   const query = `(max-width: ${maxPx}px)`;
@@ -100,8 +100,8 @@ export function MobileControls(p: MobileControlsProps) {
 
 export function MobileSummary({ data, delta }: { data: AgentLedgerData; delta: number | null }) {
   return <div className="msum">
-    <div><b>{fmtTokens(data.totals.tokens)}</b><span>Tokens</span></div>
-    <div><b>{fmtCost(data.totals).text}</b><span>Cost est.</span></div>
+    <div title={modelBreakdownTip(data, 'tokens')}><b>{fmtTokens(data.totals.tokens)}</b><span>Tokens</span></div>
+    <div title={modelBreakdownTip(data, 'cost')}><b>{fmtCost(data.totals).text}</b><span>Cost est.</span></div>
     <div><b>{Math.round(data.totals.runs).toLocaleString('en-US')}</b><span>Runs</span></div>
     <p>{Object.keys(data.nodes).length} live agents · {data.terminated.count} terminated · {data.range.fromDate} to {data.range.toDate}{delta !== null ? ` · ${delta >= 0 ? '+' : ''}${delta.toFixed(0)}% vs prior period` : ''}</p>
   </div>;

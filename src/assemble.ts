@@ -10,7 +10,7 @@ import { foldRules, loadRuleRows, type Rules } from './rules.ts';
 import { agentsQuery, historyStartQuery, runsQuery, usageQuery } from './sql.ts';
 import { resolveRange, type RangeInput, type ResolvedRange } from './time.ts';
 import { buildTree, sumRoots } from './tree.ts';
-import { addSums, zeroSums, type ActualModel, type OrgNode, type AgentLedgerData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
+import { addSums, zeroSums, type ActualModel, type ModelTotal, type OrgNode, type AgentLedgerData, type PricingStatus, type RangeMeta, type Sums } from './types.ts';
 
 export class BadRequest extends Error {}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -145,6 +145,16 @@ export function buildOrg(inp: BuildInput): BuildOutput {
   termList.sort((x, y) => y.tokens - x.tokens);
   for (const a of termAgents) { const r = runsBy.get(a.agent_id); if (r) termOwn = { ...termOwn, runsTotal: termOwn.runsTotal + n(r.runs_total), runsFailed: termOwn.runsFailed + n(r.runs_failed), runsWithUsage: termOwn.runsWithUsage + n(r.runs_with_usage) }; }
 
+  const byModel = new Map<string, ModelTotal>();
+  for (const acc of cur.values()) for (const m of acc.models.values()) {
+    const k = `${m.provider}|${m.model}`;
+    const t = byModel.get(k) ?? { provider: m.provider, model: m.model, tokens: 0, runs: 0, share: 0, costMicro: 0, priced: false, free: false, agents: 0 };
+    t.tokens += m.tokens; t.runs += m.runs; t.costMicro += m.cost; t.priced = t.priced || m.priced; t.free = t.free || m.free; t.agents += 1;
+    byModel.set(k, t);
+  }
+  const grand = [...byModel.values()].reduce((x, m) => x + m.tokens, 0);
+  const modelTotals = [...byModel.values()].map((m) => ({ ...m, share: grand ? m.tokens / grand : 0 })).sort((x, y) => y.tokens - x.tokens);
+
   const totals = sumRoots(nodes, roots, unattached, [termOwn]);
   const priorTotals = sumRoots(Object.fromEntries(Object.entries(nodes).map(([k, v]) => [k, { ...v, subtree: v.prior!.subtree }])) as Record<string, OrgNode>, roots, unattached, [termPrior]);
   const med = median(Object.values(nodes).filter((x) => x.own.runs >= inp.config.lowDataRunThreshold).map((x) => x.own.tokens));
@@ -154,7 +164,7 @@ export function buildOrg(inp: BuildInput): BuildOutput {
   return {
     range: rangeMeta(inp.range), roots, nodes, unattached,
     terminated: { count: termAgents.length, withUsage: termList.length, own: termOwn, prior: termPrior, agents: termList.slice(0, 200) },
-    totals, priorTotals, coverage: { firstEventAt: inp.firstEpoch ? iso(inp.firstEpoch * 1000) : null, providersAssumedExclusive: [...assumed].sort() },
+    totals, modelTotals, priorTotals, coverage: { firstEventAt: inp.firstEpoch ? iso(inp.firstEpoch * 1000) : null, providersAssumedExclusive: [...assumed].sort() },
     tiersConfigured, thresholds: cfg.heavyShare !== undefined ? { heavyShare: cfg.heavyShare, lowDataRuns: cfg.lowDataRuns } : { heavyShare: 15, lowDataRuns: 10 },
     unmatched: [...unmatched.values()].sort((a, b) => b.tokens - a.tokens).slice(0, 50),
   };

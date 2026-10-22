@@ -2,7 +2,7 @@ import { useHostNavigation, usePluginAction, usePluginData } from '@paperclipai/
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
 import { useEffect, useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
-import { INITIAL_FILTERS, MAX_RUN, RUN_COL, CHANGE_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { INITIAL_FILTERS, MAX_RUN, RUN_COL, CHANGE_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, modelBreakdownTip, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
 import { ModelChangeDialog } from './modelchange.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
@@ -233,8 +233,8 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
     {data && st && <>
       {Object.keys(data.errors).length > 0 && <div role="alert" className="badge warn">Some data could not be read: {Object.entries(data.errors).map(([k, v]) => `${k} (${v})`).join('; ')}</div>}
       {narrow ? <MobileSummary data={data} delta={delta} /> : <div className="sum">
-        <div><b>{fmtTokens(data.totals.tokens)}</b><span>Tokens, {data.range.fromDate} to {data.range.toDate}</span></div>
-        <div><b>{fmtCost(data.totals).text}</b><span>API-equivalent cost</span></div>
+        <div title={modelBreakdownTip(data, 'tokens')}><b>{fmtTokens(data.totals.tokens)}</b><span>Tokens, {data.range.fromDate} to {data.range.toDate}</span></div>
+        <div title={modelBreakdownTip(data, 'cost')}><b>{fmtCost(data.totals).text}</b><span>API-equivalent cost</span></div>
         <div><b>{Math.round(data.totals.runs).toLocaleString('en-US')}</b><span>Runs</span></div>
         <div><b>{Object.keys(data.nodes).length}</b><span>Live agents · {data.terminated.count} terminated</span></div>
         {delta !== null && <div><b>{delta >= 0 ? '+' : ''}{delta.toFixed(0)}%</b><span>Tokens vs prior period</span></div>}

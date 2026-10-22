@@ -10,6 +10,7 @@ export interface ActualModel {
   tokens: number; runs: number; share: number; lastAt: string; matchesConfigured: boolean;
   costMicro: number; priced: boolean; free: boolean; priceSource: string | null;
 }
+export interface ModelTotal { provider: string; model: string; tokens: number; runs: number; share: number; costMicro: number; priced: boolean; free: boolean; agents: number }
 export type FlagCode = 'heavy' | 'drift' | 'cfg_not_actual' | 'low_data' | 'unpriced' | 'errors' | 'tier';
 export interface Flag { code: FlagCode; severity: 'info' | 'warn' | 'crit'; detail: string }
 export interface OrgNode {
@@ -32,7 +33,7 @@ export interface AgentLedgerData {
   generatedAt: string; pluginVersion: string; range: RangeMeta;
   roots: string[]; nodes: Record<string, OrgNode>; unattached: string[];
   terminated: { count: number; withUsage: number; own: Sums; prior: Sums | null; agents: Array<{ agentId: string; name: string; tokens: number; runs: number; costMicro: number }> };
-  totals: Sums; priorTotals: Sums | null; pricing: PricingStatus;
+  totals: Sums; modelTotals: ModelTotal[]; priorTotals: Sums | null; pricing: PricingStatus;
   coverage: { firstEventAt: string | null; providersAssumedExclusive: string[] };
   tiersConfigured: boolean; thresholds: { heavyShare: number; lowDataRuns: number };
   errors: Record<string, string>;

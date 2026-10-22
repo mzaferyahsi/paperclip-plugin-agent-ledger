@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.5.0
+
+- Hover the Tokens or API-equivalent cost tile (or the phone summary) to see tokens, share, cost and agent count for each model used in the range, all agents together, so you can see what each model change contributed. No new capability.
+
 ## 0.4.1
 
 - Fix: changing an agent between providers failed with "Select an AI connection compatible with the new harness and model" when the agent signs in through an AI connection (for example Rushu or Kiin on Codex moving to Claude). The connection binding now moves with the provider (your own sign-in for the new provider, shown in What changes). If no connection fits the new provider and model, the dialog says so and does not write anything.
