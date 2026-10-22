@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented here. The format follows Keep a Changelog; versions follow semver, with breaking changes bumping the minor version while the plugin runtime is still marked early (0.y.z).
 
+## 0.4.0
+
+- Change model: board members get a Model column with a Change button (and Change model in the phone detail). Pick the provider and the model (the host lists the models of each provider, or type one), see exactly which keys change, then Apply. The agent keeps its instructions, skills, working directory, secrets and heartbeat settings; its saved session is reset when the provider or model changes; an agent that is running is refused. The change is made through the Paperclip API as the signed-in board member, so the host decides who may do it. No new capability.
+- Provider profiles in the settings page: the base settings used when an agent moves to a provider (keys to set, keys to remove, whether it takes a reasoning effort). Standard profiles for Codex, Claude and OpenCode are built in; you can change them or add a provider. A profile cannot touch env, secrets, working directory, instructions or the model. Database migration 002 adds the profile rule kind.
+- Settings button on the Agent Ledger page.
+- Picking both custom dates now selects the Custom range by itself.
+
 ## 0.3.0
 
 - The page opens with the Running or active filter on, so idle agents with no runs in the range are hidden until you set Activity back to all.

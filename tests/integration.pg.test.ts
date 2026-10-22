@@ -9,7 +9,7 @@ import { Cache } from '../src/cache.ts';
 import { DEFAULT_CONFIG, getAgentLedger } from '../src/assemble.ts';
 import { refreshPrices } from '../src/prices/refresh.ts';
 import { ensureSnapshot, loadVersions, HELD_SQL, DECIDE_HELD_SQL } from '../src/prices/store.ts';
-import { INSERT_RULE_SQL } from '../src/rules.ts';
+import { INSERT_RULE_SQL, RULES_SQL } from '../src/rules.ts';
 
 const C = '11111111-1111-1111-1111-111111111111';
 const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -25,8 +25,8 @@ test.before(async () => {
   await pg.query(`CREATE TABLE public.cost_events (id bigserial PRIMARY KEY, company_id uuid NOT NULL, agent_id uuid NOT NULL, heartbeat_run_id uuid, provider text NOT NULL, biller text, billing_type text NOT NULL DEFAULT 'subscription_included', model text NOT NULL, input_tokens integer NOT NULL, cached_input_tokens integer NOT NULL DEFAULT 0, output_tokens integer NOT NULL, occurred_at timestamptz NOT NULL)`);
   await pg.query(`CREATE TABLE public.heartbeat_runs (id uuid PRIMARY KEY, company_id uuid NOT NULL, agent_id uuid NOT NULL, status text NOT NULL, started_at timestamptz NOT NULL, usage_json jsonb)`);
   await pg.query(`CREATE SCHEMA ${NS}`);
-  const mig = readFileSync(new URL('../migrations/001_init.sql', import.meta.url), 'utf8');
-  await pg.query(mig);
+  for (const f of ['001_init.sql', '002_provider_profile_rules.sql']) await pg.query(readFileSync(new URL(`../migrations/${f}`, import.meta.url), 'utf8'));
+  await pg.query(readFileSync(new URL('../migrations/002_provider_profile_rules.sql', import.meta.url), 'utf8')); // re-runnable
   const agent = (n: number, name: string, role: string, status: string, parent: number | null, adapter: string, model: string | null) =>
     pg!.query(`INSERT INTO public.agents VALUES ($1,$2,$3,$4,NULL,$5,$6,$7,$8::jsonb,NULL)`, [id(n), C, name, role, status, parent ? id(parent) : null, adapter, JSON.stringify(model ? { model, engine: 'cli', access: { SECRET: 'must-not-leak' } } : {})]);
   await agent(1, 'Root', 'ceo', 'idle', null, 'claude_local', 'claude-opus-5-5');
@@ -76,6 +76,14 @@ test('company scoping: another company sees nothing', async (t) => {
   const d = await getAgentLedger(env(), '22222222-2222-2222-2222-222222222222', '7d');
   assert.equal(Object.keys(d.nodes).length, 0);
   assert.equal(d.totals.tokens, 0);
+});
+
+test('provider profile rules can be stored and read back', async (t) => {
+  if (!pg) return t.skip('no pg');
+  await pg.execute(INSERT_RULE_SQL, [C, 'provider_profile', 'claude_local', JSON.stringify({ label: 'Claude custom', set: { engine: 'cli' }, drop: [] }), true, 'u1']);
+  const rows = await pg.query<{ kind: string; key: string }>(RULES_SQL, [C]);
+  assert.ok(rows.some((r) => r.kind === 'provider_profile' && r.key === 'claude_local'));
+  await pg.execute(INSERT_RULE_SQL, [C, 'provider_profile', 'claude_local', '{}', false, 'u1']);
 });
 
 test('rules: override prices win, free providers show no cost, aliases map names', async (t) => {

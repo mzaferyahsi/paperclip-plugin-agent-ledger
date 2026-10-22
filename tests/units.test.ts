@@ -152,6 +152,13 @@ test('outbound: only the four allowlisted hosts, only through prices/fetch.ts', 
   for (const f of walk(new URL('../src', import.meta.url).pathname)) {
     if (f.endsWith('prices/fetch.ts') || f.endsWith('prices/sources.ts')) continue;
     const text = readFileSync(f, 'utf8');
+    if (f.endsWith('ui/hostapi.ts')) { // the one UI file that calls the host itself: same-origin /api/ paths only, never another host
+      const code = text.replace(/\/\/.*$/gm, '');
+      assert.doesNotMatch(code, /https?:\/\/|XMLHttpRequest/);
+      assert.equal((code.match(/\bfetch\s*\(/g) ?? []).length, 1);
+      for (const m of code.matchAll(/call<[^>]*>\(\s*[`'"]([^`'"]*)/g)) assert.match(m[1]!, /^\/api\//, 'host calls must be same-origin /api/ paths');
+      continue;
+    }
     assert.doesNotMatch(text.replace(/\/\/.*$/gm, ''), /\bfetch\s*\(|XMLHttpRequest|https?:\/\/(?!www\.w3\.org)/, `${f} must not make or name outbound requests`);
   }
   // redirects off the allowlist and oversized bodies are refused
@@ -220,4 +227,45 @@ test('capabilities: the only agent capability is invoke, used only by the board-
   assert.doesNotMatch(worker, /ctx\.agents\.(pause|resume|list|get)/);
   const i = worker.indexOf("actions.register('agents.run'");
   assert.match(worker.slice(i, i + 400), /requireBoard\(a\.actor, 'run agents'\)/, 'the run action checks the board first');
+});
+
+// --- provider profiles and model change (src/provider.ts) ---
+import { DEFAULT_PROFILES, buildNextConfig, diffConfig, mergeProfiles, needsSessionReset, validateProfile } from '../src/provider.ts';
+
+const codexCfg = { cwd: '/w', env: { A: { type: 'secret_ref', secretId: 's' } }, 'access.X': { secretId: 'y' }, instructionsFilePath: '/i.md', paperclipSkillSync: { on: true }, model: 'gpt-6.1-sol', engine: 'cli', mode: 'persistent', modelReasoningEffort: 'medium', dangerouslyBypassApprovalsAndSandbox: true };
+
+test('moving codex to claude keeps agent-owned keys and drops provider keys', () => {
+  const next = buildNextConfig(codexCfg, 'codex_local', 'claude_local', 'claude-sonnet-5-5', DEFAULT_PROFILES.claude_local);
+  assert.deepEqual(next, { cwd: '/w', env: codexCfg.env, 'access.X': codexCfg['access.X'], instructionsFilePath: '/i.md', paperclipSkillSync: { on: true }, engine: 'cli', mode: 'persistent', model: 'claude-sonnet-5-5' });
+});
+test('same provider keeps every key; reasoning effort is kept or chosen', () => {
+  const keep = buildNextConfig(codexCfg, 'codex_local', 'codex_local', 'gpt-6-luna', DEFAULT_PROFILES.codex_local);
+  assert.equal(keep.dangerouslyBypassApprovalsAndSandbox, true); assert.equal(keep.modelReasoningEffort, 'medium'); assert.equal(keep.model, 'gpt-6-luna');
+  assert.equal(buildNextConfig(codexCfg, 'codex_local', 'codex_local', 'gpt-6-luna', DEFAULT_PROFILES.codex_local, 'high').modelReasoningEffort, 'high');
+  assert.equal(buildNextConfig({ model: 'x' }, 'claude_local', 'codex_local', 'gpt-6-luna', DEFAULT_PROFILES.codex_local, 'bogus').modelReasoningEffort, 'medium');
+});
+test('the diff never shows env or access secrets', () => {
+  const next = buildNextConfig(codexCfg, 'codex_local', 'claude_local', 'claude-sonnet-5-5', DEFAULT_PROFILES.claude_local);
+  const keys = diffConfig(codexCfg, next, 'codex_local', 'claude_local').map((c) => c.key);
+  assert.deepEqual(keys, ['adapterType', 'dangerouslyBypassApprovalsAndSandbox', 'model', 'modelReasoningEffort']);
+  assert.equal(needsSessionReset(codexCfg, 'codex_local', 'codex_local', 'gpt-6.1-sol'), false);
+  assert.equal(needsSessionReset(codexCfg, 'codex_local', 'codex_local', 'other'), true);
+});
+test('a model name with shell or path tricks is refused', () => {
+  for (const m of ['', 'a;rm -rf', 'a$(b)', 'x'.repeat(130), 'a\nb']) assert.throws(() => buildNextConfig({}, 'a', 'b', m, undefined));
+});
+test('profiles cannot touch secrets, env, cwd, instructions or the model', () => {
+  for (const k of ['env', 'cwd', 'access.K', 'instructionsFilePath', 'apiKey', 'OAUTH_TOKEN', 'model', 'secretRef'])
+    assert.throws(() => validateProfile('claude_local', { label: 'x', set: { [k]: 'v' } }), /cannot be set/);
+  assert.throws(() => validateProfile('claude_local', { label: 'x', drop: ['env'] }), /cannot be removed/);
+  assert.throws(() => validateProfile('Bad-Name', { label: 'x' }));
+  assert.throws(() => validateProfile('claude_local', { label: '' }));
+  assert.throws(() => validateProfile('claude_local', { label: 'x', set: { engine: { a: 1 } } }));
+  const ok = validateProfile('gemini_local', { label: 'Gemini', set: { engine: 'cli', n: 3, b: true }, drop: ['effort'], reasoning: true });
+  assert.equal(ok.key, 'gemini_local'); assert.equal(ok.value.reasoningDefault, 'medium');
+});
+test('saved profiles overlay the standard ones and bad rows are ignored', () => {
+  const m = mergeProfiles([{ key: 'claude_local', value: { label: 'Claude custom', set: { engine: 'acp' } } }, { key: 'broken', value: { label: '', set: { env: 1 } } }, { key: 'x_local', value: { label: 'X' } }]);
+  assert.equal(m.claude_local!.label, 'Claude custom'); assert.equal(m.codex_local!.label, DEFAULT_PROFILES.codex_local!.label);
+  assert.ok(m.x_local); assert.equal(m.broken, undefined);
 });

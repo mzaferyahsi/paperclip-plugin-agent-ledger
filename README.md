@@ -39,7 +39,9 @@ Uninstall with `paperclipai plugin uninstall mzaferyahsi.agent-ledger` (add `--f
 | `agents.invoke` | Only for the Run button: a board member picks up to 10 agents and confirms, and each agent that is idle or in error gets a run started. Never used by a job or without a click. |
 | `ui.page.register`, `ui.sidebar.register`, `instance.settings.register` | The page, the sidebar link and the settings page. |
 
-The plugin never writes to Paperclip's tables, never assigns agents, never pauses or resumes them, and never posts comments. It starts an agent only when a board member clicks Run and confirms.
+The plugin worker never writes to Paperclip's tables, never assigns agents, never pauses or resumes them, and never posts comments. It starts an agent only when a board member clicks Run and confirms.
+
+**Change model.** The Change button in the Model column changes an agent's provider and model. The page does this itself through the Paperclip API (`PATCH /api/agents/{id}` and the session reset) as the signed-in board member, after showing the keys that change. The plugin worker is not involved and gets no extra capability; the host refuses anyone who is not allowed to edit agents. The provider profiles in the settings page decide which adapter keys are set or removed; a profile cannot touch env, secrets, the working directory, instructions or the model. Instructions, skills, secrets and heartbeat settings of the agent are kept as they are.
 
 ## Prices
 

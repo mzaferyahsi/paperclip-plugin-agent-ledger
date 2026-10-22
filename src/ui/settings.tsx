@@ -28,6 +28,40 @@ function RuleForm({ kind, fields, onSave, busy }: { kind: string; fields: Array<
     <button style={btn} type="submit" disabled={busy}>Add</button></form>;
 }
 
+
+interface ProfileValue { label?: string; set?: Record<string, string | number | boolean>; drop?: string[]; reasoning?: boolean; reasoningLevels?: string[]; reasoningDefault?: string }
+const parseSet = (t: string): Record<string, string | number | boolean> => {
+  const out: Record<string, string | number | boolean> = {};
+  for (const line of t.split('\n')) {
+    const i = line.indexOf('='); if (i < 1) continue;
+    const k = line.slice(0, i).trim(), x = line.slice(i + 1).trim();
+    out[k] = x === 'true' ? true : x === 'false' ? false : x !== '' && Number.isFinite(Number(x)) ? Number(x) : x;
+  }
+  return out;
+};
+/** One provider profile: the base settings an agent gets when it moves to this provider. */
+function ProfileEditor({ adapter, value, isDefault, canEdit, busy, onSave, onReset }: { adapter: string; value: ProfileValue; isDefault: boolean; canEdit: boolean; busy: boolean; onSave: (adapter: string, v: ProfileValue) => void; onReset: () => void }) {
+  const [label, setLabel] = useState(value.label ?? adapter);
+  const [set, setSet] = useState(Object.entries(value.set ?? {}).map(([k, x]) => `${k}=${x}`).join('\n'));
+  const [drop, setDrop] = useState((value.drop ?? []).join(', '));
+  const [reasoning, setReasoning] = useState(!!value.reasoning);
+  const [levels, setLevels] = useState((value.reasoningLevels ?? []).join(', '));
+  const [def, setDef] = useState(value.reasoningDefault ?? 'medium');
+  const save = (e: React.FormEvent) => { e.preventDefault(); onSave(adapter, { label, set: parseSet(set), drop: drop.split(',').map((x) => x.trim()).filter(Boolean), reasoning, reasoningLevels: levels.split(',').map((x) => x.trim()).filter(Boolean), reasoningDefault: def }); };
+  return <form onSubmit={save} style={{ display: 'grid', gap: 6, borderTop: '1px solid var(--border)', paddingTop: 8 }} aria-label={`Profile ${adapter}`}>
+    <div><code>{adapter}</code> <span style={{ color: 'var(--muted-foreground)' }}>{isDefault ? '(standard)' : '(your settings)'}</span></div>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      <label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Label<input style={input} value={label} onChange={(e) => setLabel(e.target.value)} disabled={!canEdit} required /></label>
+      <label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Keys to remove (comma separated)<input style={{ ...input, minWidth: 260 }} value={drop} onChange={(e) => setDrop(e.target.value)} disabled={!canEdit} /></label></div>
+    <label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Keys to set, one <code>key=value</code> per line<textarea style={{ ...input, fontFamily: 'monospace' }} rows={3} value={set} onChange={(e) => setSet(e.target.value)} disabled={!canEdit} /></label>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'end' }}>
+      <label style={{ display: 'flex', gap: 4, alignItems: 'center', fontSize: 12 }}><input type="checkbox" checked={reasoning} onChange={(e) => setReasoning(e.target.checked)} disabled={!canEdit} />Offers a reasoning effort</label>
+      {reasoning && <><label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Levels<input style={input} value={levels} onChange={(e) => setLevels(e.target.value)} disabled={!canEdit} /></label>
+        <label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Default<input style={{ ...input, width: 90 }} value={def} onChange={(e) => setDef(e.target.value)} disabled={!canEdit} /></label></>}
+      {canEdit && <><button style={btn} type="submit" disabled={busy}>Save</button>{!isDefault && <button style={btn} type="button" disabled={busy} onClick={onReset}>Back to standard</button>}</>}</div>
+  </form>;
+}
+
 function UnpricedRow({ m, canEdit, busy, onPrice, onFree }: { m: { provider: string; model: string; tokens: number }; canEdit: boolean; busy: boolean; onPrice: (input: number, output: number) => void; onFree: () => void }) {
   const [i, setI] = useState(''); const [o, setO] = useState('');
   const ok = i !== '' && o !== '' && Number(i) >= 0 && Number(o) >= 0;
@@ -41,6 +75,8 @@ function UnpricedRow({ m, canEdit, busy, onPrice, onFree }: { m: { provider: str
 
 export function AgentLedgerSettingsPage({ context }: PluginCompanySettingsPageProps) {
   const result = usePluginData<SettingsData>('settings', { companyId: context.companyId });
+  const prof = usePluginData<{ profiles: Record<string, ProfileValue> }>('provider-profiles', { companyId: context.companyId });
+  const [newAdapter, setNewAdapter] = useState('');
   const put = usePluginAction('rules.put');
   const decide = usePluginAction('prices.decide');
   const refresh = usePluginAction('prices.refresh');
@@ -51,7 +87,7 @@ export function AgentLedgerSettingsPage({ context }: PluginCompanySettingsPagePr
   if (isBoard === null) whoami({}).then((r) => setIsBoard(!!(r as { isBoard?: boolean })?.isBoard)).catch(() => setIsBoard(false));
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true); setMsg(null);
-    try { await fn(); setMsg(ok); result.refresh(); } catch (e) { setMsg(String((e as Error).message ?? e)); } finally { setBusy(false); }
+    try { await fn(); setMsg(ok); result.refresh(); prof.refresh(); } catch (e) { setMsg(String((e as Error).message ?? e)); } finally { setBusy(false); }
   };
   const d = result.data;
   const rules = (kind: string) => (d?.rules ?? []).filter((r) => r.kind === kind);
@@ -94,6 +130,15 @@ export function AgentLedgerSettingsPage({ context }: PluginCompanySettingsPagePr
             onPrice={(input, output) => run(() => put({ kind: 'price_override', key: `${m.provider}/${m.model}`, value: { input, output } }), 'Price saved')}
             onFree={() => run(() => put({ kind: 'provider_free', key: m.provider, value: {} }), `${m.provider} marked as free`)} />)}</tbody></table></>}
         {rules('provider_free').length > 0 && <><h3 style={{ fontSize: 13, margin: 0 }}>Free or local providers</h3>{list('provider_free', (r) => r.key)}</>}
+      </section>
+
+      <section style={panel} aria-labelledby="ou-prov"><h2 id="ou-prov" style={{ fontSize: 15, margin: 0 }}>Provider profiles</h2>
+        <p style={{ margin: 0 }}>The base settings an agent gets when you change its provider from the Model column. The agent keeps its instructions, skills, working directory, secrets and heartbeat settings; only the keys below are removed or set, and the model is the one you pick. Profiles cannot touch secrets or the working directory. The standard profiles match the <code>pc-agent-model</code> tool.</p>
+        {prof.data && Object.entries(prof.data.profiles).map(([a, v]) => <ProfileEditor key={a + JSON.stringify(v)} adapter={a} value={v} isDefault={!rules('provider_profile').some((r) => r.key === a)} canEdit={!!isBoard} busy={busy}
+          onSave={(adapter, value) => run(() => put({ kind: 'provider_profile', key: adapter, value }), `Saved the ${adapter} profile`)}
+          onReset={() => run(() => put({ kind: 'provider_profile', key: a, value: rules('provider_profile').find((r) => r.key === a)?.value ?? v, active: false }), `${a} is back to the standard profile`)} />)}
+        {isBoard && <form style={{ display: 'flex', gap: 8, alignItems: 'end', flexWrap: 'wrap' }} aria-label="Add provider profile" onSubmit={(e) => { e.preventDefault(); const k = newAdapter.trim(); if (k) run(() => put({ kind: 'provider_profile', key: k, value: { label: k, set: {}, drop: [] } }), `Added ${k}; edit it above`).then(() => setNewAdapter('')); }}>
+          <label style={{ display: 'grid', gap: 2, fontSize: 12 }}>Add a provider<input style={input} placeholder="adapter type, e.g. gemini_local" value={newAdapter} onChange={(e) => setNewAdapter(e.target.value)} /></label><button style={btn} type="submit" disabled={busy}>Add</button></form>}
       </section>
 
       <section style={panel} aria-labelledby="ou-tiers"><h2 id="ou-tiers" style={{ fontSize: 15, margin: 0 }}>Tiers (optional)</h2>

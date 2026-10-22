@@ -56,6 +56,12 @@ const plugin = definePlugin({
       return { rules, held, pricing: usage.pricing, config: cfg, folded: foldRules(rules) };
     });
 
+    // Provider profiles for the model-change dialog: the standard ones overlaid with the saved ones. Readable by everyone; changing an agent is checked by the host.
+    ctx.data.register('provider-profiles', async (p) => {
+      const companyId = requireCompany(p.companyId);
+      return { profiles: foldRules(await loadRuleRows(ctx.db, companyId)).providerProfiles };
+    });
+
     // Jobs have no company context, so they use the configuration of the company that last opened the page, else the defaults.
     const jobConfig = async (companyId?: string | null): Promise<Config> => {
       try {
@@ -96,6 +102,7 @@ const plugin = definePlugin({
       cache.clear();
       return { results };
     });
+    ctx.actions.register('cache.clear', async (_p, a) => { requireBoard(a.actor, 'refresh the ledger'); cache.clear(); return { ok: true }; });
     ctx.actions.register('prices.refresh', async (_p, a) => { requireBoard(a.actor); return runRefresh('manual', a.companyId ?? a.actor.companyId ?? null); });
     ctx.actions.register('prices.decide', async (p, a) => {
       requireBoard(a.actor);

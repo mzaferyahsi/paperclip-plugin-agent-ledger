@@ -107,13 +107,13 @@ export function MobileSummary({ data, delta }: { data: AgentLedgerData; delta: n
   </div>;
 }
 
-function Detail({ n, data, onRun }: { n: OrgNode; data: AgentLedgerData; onRun: (() => void) | null }) {
+function Detail({ n, data, onRun, onChange }: { n: OrgNode; data: AgentLedgerData; onRun: (() => void) | null; onChange: (() => void) | null }) {
   const mgr = n.children.length > 0;
   const own = n.own, sub = n.subtree;
   const cost = (s: typeof own) => fmtCost(s).text;
   const nav = useHostNavigation();
   return <div className="mdet">
-    {onRun && <div><button type="button" className="btn" onClick={onRun}>Run {n.name} now</button></div>}
+    {(onRun || onChange) && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{onRun && <button type="button" className="btn" onClick={onRun}>Run {n.name} now</button>}{onChange && <button type="button" className="btn" onClick={onChange}>Change model</button>}</div>}
     <div><h3>Usage</h3><dl>
       <dt>{mgr ? 'Tokens (own)' : 'Tokens'}</dt><dd>{fmtTokens(own.tokens)}</dd>
       {mgr && <><dt>Tokens (with reports)</dt><dd>{fmtTokens(sub.tokens)}</dd></>}
@@ -133,7 +133,7 @@ function Detail({ n, data, onRun }: { n: OrgNode; data: AgentLedgerData; onRun: 
   </div>;
 }
 
-export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun }: { data: AgentLedgerData; rows: Row[]; st: TableState; flat: boolean; toggleTree: (id: string) => void; canRun: boolean; onRun: (n: OrgNode) => void }) {
+export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun, onChange }: { data: AgentLedgerData; rows: Row[]; st: TableState; flat: boolean; toggleTree: (id: string) => void; canRun: boolean; onRun: (n: OrgNode) => void; onChange: (n: OrgNode) => void }) {
   const [open, setOpen] = useState<Set<string>>(new Set());
   const flip = (id: string) => setOpen((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x; });
   if (rows.length === 0) return <p className="dim">{Object.keys(data.nodes).length === 0 ? 'No agents found for this company.' : 'No agents match the filters.'}</p>;
@@ -154,7 +154,7 @@ export function MobileList({ data, rows, st, flat, toggleTree, canRun, onRun }: 
           </button>
           <span className="mnum"><b>{fmtTokens(s.tokens)}</b><span>{c.text}</span></span>
         </div>
-        {detailOpen && <Detail n={n} data={data} onRun={canRun && isRunnable(n) ? () => onRun(n) : null} />}
+        {detailOpen && <Detail n={n} data={data} onRun={canRun && isRunnable(n) ? () => onRun(n) : null} onChange={canRun && n.status !== 'running' ? () => onChange(n) : null} />}
       </li>;
     })}
   </ul>;

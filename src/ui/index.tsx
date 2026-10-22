@@ -2,8 +2,9 @@ import { useHostNavigation, usePluginAction, usePluginData } from '@paperclipai/
 import type { PluginPageProps, PluginSidebarProps } from '@paperclipai/plugin-sdk/ui';
 import { useEffect, useMemo, useState } from 'react';
 import type { OrgNode, AgentLedgerData } from '../types.ts';
-import { INITIAL_FILTERS, MAX_RUN, RUN_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
+import { INITIAL_FILTERS, MAX_RUN, RUN_COL, CHANGE_COL, isRunnable, ACTIVITY_FILTERS, isOpen, ACTIVITY_LABEL, COLUMNS, activityOf, fmtAgo, isDisabled, expandedToLevel, fmtCost, fmtTokens, sumsFor, toCsv, visibleRows, type ColumnKey, type Filters, type Mode, type Row, type TableState } from './model.ts';
 import { AgentLedgerSettingsPage } from './settings.tsx';
+import { ModelChangeDialog } from './modelchange.tsx';
 import { FLAG_HELP } from './flaghelp.ts';
 import { MobileControls, MobileList, MobileSummary, mobileCss, useNarrow } from './mobile.tsx';
 
@@ -76,7 +77,7 @@ function loadCols(): Set<ColumnKey> {
 }
 function saveCols(s: Set<ColumnKey>) { try { localStorage.setItem('agent-ledger.columns.v3', JSON.stringify([...s])); } catch { /* storage unavailable */ } }
 
-function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void; onRun: () => void }) {
+function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun, onChange }: { n: OrgNode; col: ColumnKey; data: AgentLedgerData; mode: Mode; maxTokens: number; depth: number; flat: boolean; open: boolean; toggle: () => void; onRun: () => void; onChange: () => void }) {
   const nav = useHostNavigation();
   const mgr = n.children.length > 0;
   const num = (get: (s: typeof n.own) => number, fmt: (v: number) => string) => {
@@ -111,6 +112,7 @@ function Cell({ n, col, data, mode, maxTokens, depth, flat, open, toggle, onRun 
     }
     case 'runs': return <span className="n">{num((s) => s.runs, (v) => Math.round(v).toLocaleString('en-US'))}</span>;
     case 'flags': return <>{n.flags.map((f) => <FlagChip key={f.code} code={f.code} severity={f.severity} detail={f.detail} />)}</>;
+    case 'change': return n.status === 'running' ? <span className="dim" title="Running now: change the model after the run">Running</span> : <button type="button" className="btn runb" title={`Change the provider or model of ${n.name}`} onClick={onChange}>Change</button>;
     case 'run': return isRunnable(n) ? <button type="button" className="btn runb" title={`Start a run for ${n.name} now`} onClick={onRun}>Run</button> : <span className="dim" title={n.status === 'running' ? 'Already running' : 'Paused agents cannot run'}>{n.status === 'running' ? 'Running' : '—'}</span>;
   }
 }
@@ -149,7 +151,9 @@ function PriceBadge({ data }: { data: AgentLedgerData }) {
 
 export function AgentLedgerPage({ context }: PluginPageProps) {
   const [range, setRange] = useState<string | { from: string; to: string }>('7d');
-  const [custom, setCustom] = useState({ from: '', to: '' });
+  const [custom, setCustomDates] = useState({ from: '', to: '' });
+  // Picking both dates selects Custom by itself; a reversed pair waits until it is fixed.
+  const setCustom = (c: { from: string; to: string }) => { setCustomDates(c); if (c.from && c.to && c.from <= c.to) setRange({ from: c.from, to: c.to }); };
   const result = usePluginData<AgentLedgerData>('agent-ledger', { companyId: context.companyId, range });
   const [mode, setMode] = useState<Mode>('both');
   const [filters, setFilters] = useState<Filters>(initialFilters);
@@ -157,6 +161,9 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const [expanded, setExpanded] = useState<Set<string> | null>(null);
   const [cols, setCols] = useState<Set<ColumnKey>>(loadCols);
   const [menu, setMenu] = useState(false);
+  const nav = useHostNavigation();
+  const clearCache = usePluginAction('cache.clear');
+  const [changing, setChanging] = useState<OrgNode | null>(null);
   const run = usePluginAction('agents.run'), whoami = usePluginAction('viewer');
   const [isBoard, setIsBoard] = useState(false), [pending, setPending] = useState<OrgNode[] | null>(null), [runBusy, setRunBusy] = useState(false), [runMsg, setRunMsg] = useState<string | null>(null);
   useEffect(() => { whoami({}).then((r) => setIsBoard(!!(r as { isBoard?: boolean })?.isBoard)).catch(() => setIsBoard(false)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -164,7 +171,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const data = result.data;
   const st = useMemo<TableState | null>(() => data ? { expanded: expanded ?? expandedToLevel(data, 3), mode, sort, filters } : null, [data, expanded, mode, sort, filters]);
   const rows: Row[] = useMemo(() => (data && st ? visibleRows(data, st) : []), [data, st]);
-  const visibleCols = [...COLUMNS.filter((c) => cols.has(c.key) && (c.key !== 'tier' || data?.tiersConfigured)), ...(isBoard ? [RUN_COL] : [])];
+  const visibleCols = [...COLUMNS.filter((c) => cols.has(c.key) && (c.key !== 'tier' || data?.tiersConfigured)), ...(isBoard ? [CHANGE_COL, RUN_COL] : [])];
   const maxTokens = Math.max(1, ...Object.values(data?.nodes ?? {}).map((n) => sumsFor(n, mode).tokens));
   const adapters = [...new Set(Object.values(data?.nodes ?? {}).map((n) => n.adapterType))].sort();
   const models = [...new Set(Object.values(data?.nodes ?? {}).flatMap((n) => [n.configuredModel, ...n.actualModels.map((m) => m.model)]).filter((x): x is string => !!x))].sort();
@@ -194,14 +201,14 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
   const delta = data?.priorTotals && data.priorTotals.tokens > 0 ? ((data.totals.tokens - data.priorTotals.tokens) / data.priorTotals.tokens) * 100 : null;
 
   return <div className="ou"><style>{css}</style>
-    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent Ledger</h1>{data && <PriceBadge data={data} />}</div>
+    <div className="bar"><h1 style={{ fontSize: 20, margin: 0 }}>Agent Ledger</h1>{data && <PriceBadge data={data} />}<a className="btn" style={{ marginLeft: 'auto', textDecoration: 'none' }} title="Prices, tiers and provider profiles" {...nav.linkProps('/company/settings/agent-ledger-settings')}>Settings</a></div>
     {narrow ? <MobileControls range={range} setRange={setRange} custom={custom} setCustom={setCustom} mode={mode} setMode={setMode} filters={filters} setFilters={setFilters} sort={sort} setSort={setSort}
       adapters={adapters} models={models} tiers={tiers} onExpandAll={() => data && setExpanded(new Set(Object.values(data.nodes).filter((n) => n.children.length).map((n) => n.agentId)))} onCollapse={() => data && setExpanded(expandedToLevel(data, 1))} onCsv={exportCsv} /> : <>
     <div className="bar">
       <div className="grp"><span className="gl" id="ou-range-label">Time range</span><div className="seg" role="group" aria-labelledby="ou-range-label">{PRESETS.map((p) => <button key={p} type="button" title={RANGE_TIP[p]} aria-pressed={range === p} onClick={() => setRange(p)}>{LABEL[p]}</button>)}
-        <button type="button" title="Use the From and To dates. Pick both dates first." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div></div>
-      <label className="f" title="First day of a custom range">From <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} /></label>
-      <label className="f" title="Last day of a custom range">To <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} /></label>
+        <button type="button" title="Use the From and To dates. It is also selected when you pick both dates." aria-pressed={typeof range === 'object'} onClick={() => custom.from && custom.to && setRange({ from: custom.from, to: custom.to })}>Custom</button></div></div>
+      <label className="f" title="First day of a custom range">From <input type="date" value={custom.from} onChange={(e) => setCustom({ ...custom, from: e.target.value })} aria-invalid={!!custom.from && !!custom.to && custom.from > custom.to} /></label>
+      <label className="f" title="Last day of a custom range">To <input type="date" value={custom.to} onChange={(e) => setCustom({ ...custom, to: e.target.value })} aria-invalid={!!custom.from && !!custom.to && custom.from > custom.to} /></label>
       <div className="grp"><span className="gl" id="ou-mode-label">Totals</span><div className="seg" role="group" aria-labelledby="ou-mode-label">{(['own', 'sub', 'both'] as const).map((m) => <button key={m} type="button" title={MODE_TIP[m]} aria-pressed={mode === m} onClick={() => setMode(m)}>{m === 'own' ? 'Own' : m === 'sub' ? 'Subtree' : 'Both'}</button>)}</div></div>
       <button type="button" className="btn" title="Open every manager to show all agents" onClick={() => data && setExpanded(new Set(Object.values(data.nodes).filter((n) => n.children.length).map((n) => n.agentId)))}>Expand all</button>
       <button type="button" className="btn" title="Show the top two levels of the organisation only" onClick={() => data && setExpanded(expandedToLevel(data, 1))}>Collapse to level 2</button>
@@ -220,6 +227,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
       <label className="f" title="Find agents by name; matching agents are shown with their managers">Search <input type="search" value={filters.q} placeholder="agent name" onChange={(e) => setFilters({ ...filters, q: e.target.value })} /></label>
     </div></>}
     {isBoard && data && <RunBar shown={runnableShown.length} pending={pending} busy={runBusy} msg={runMsg} onAsk={() => askRun(runnableShown)} onConfirm={confirmRun} onCancel={() => setPending(null)} onDismiss={() => setRunMsg(null)} />}
+    {changing && context.companyId && <ModelChangeDialog agentId={changing.agentId} name={changing.name} companyId={context.companyId} onClose={() => setChanging(null)} onDone={async (m) => { setChanging(null); setRunMsg(m); try { await clearCache({}); } catch { /* the page refreshes anyway */ } result.refresh(); }} />}
     {result.loading && !data && <p role="status">Loading agent ledger…</p>}
     {result.error && <div role="alert">Agent Ledger could not be loaded: {String(result.error.message ?? result.error)} <button type="button" className="btn" onClick={result.refresh}>Retry</button></div>}
     {data && st && <>
@@ -231,9 +239,9 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
         <div><b>{Object.keys(data.nodes).length}</b><span>Live agents · {data.terminated.count} terminated</span></div>
         {delta !== null && <div><b>{delta >= 0 ? '+' : ''}{delta.toFixed(0)}%</b><span>Tokens vs prior period</span></div>}
       </div>}
-      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} canRun={isBoard} onRun={(n) => askRun([n])} /> : <div className="wrap"><table>
+      {narrow ? <MobileList data={data} rows={rows} st={st} flat={flat} toggleTree={toggle} canRun={isBoard} onRun={(n) => askRun([n])} onChange={(n) => setChanging(n)} /> : <div className="wrap"><table>
         <thead><tr>{visibleCols.map((c) => <th key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`} tabIndex={0} title={COLUMN_TIP[c.key]} aria-sort={sort?.key === c.key ? (sort.dir === 1 ? 'ascending' : 'descending') : undefined}
-          onClick={() => c.key !== 'run' && header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter' && c.key !== 'run') header(c.key); }}>{c.label}</th>)}</tr></thead>
+          onClick={() => c.key !== 'run' && c.key !== 'change' && header(c.key)} onKeyDown={(e) => { if (e.key === 'Enter' && c.key !== 'run' && c.key !== 'change') header(c.key); }}>{c.label}</th>)}</tr></thead>
         <tbody>
           {rows.length === 0 && <tr><td colSpan={visibleCols.length} className="dim">{Object.keys(data.nodes).length === 0 ? 'No agents found for this company.' : 'No agents match the filters.'}</td></tr>}
           {rows.map((r, i) => {
@@ -245,7 +253,7 @@ export function AgentLedgerPage({ context }: PluginPageProps) {
                 : c.key === 'output' ? fmtTokens(data.terminated.own.output) : c.key === 'runs' ? Math.round(data.terminated.own.runs).toLocaleString('en-US') : c.key === 'cost' ? fmtCost(data.terminated.own).text : null}</td>)}</tr>;
             const n = r.node;
             return <tr key={n.agentId} className={n.children.length && !flat ? 'm' : ''}>{visibleCols.map((c) => <td key={c.key} className={`${c.numeric ? 'n' : ''}${c.key === 'name' ? ' nc' : ''}`}>
-              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} onRun={() => askRun([n])} />
+              <Cell n={n} col={c.key} data={data} mode={mode} maxTokens={maxTokens} depth={r.depth} flat={flat} open={isOpen(st, n.agentId)} toggle={() => toggle(n.agentId)} onRun={() => askRun([n])} onChange={() => setChanging(n)} />
               {c.key === 'name' && r.filteredManager && <span className="dim" style={{ marginLeft: 6, fontSize: 10 }}>(filtered: totals include the full subtree)</span>}</td>)}</tr>;
           })}
           {!isFilteringNow(filters) && <tr><td className="nc"><strong>Total</strong></td>{visibleCols.slice(1).map((c) => <td key={c.key} className={c.numeric ? 'n' : ''}>
